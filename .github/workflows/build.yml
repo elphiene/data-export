@@ -11,6 +11,8 @@ on:
 jobs:
   build:
     runs-on: windows-latest
+    permissions:
+      contents: write   # needed to create releases
 
     steps:
       - name: Checkout
@@ -29,9 +31,11 @@ jobs:
         working-directory: data-export/ink-density-tool
         run: pyinstaller build.spec
 
-      - name: Upload EXE artifact
-        uses: actions/upload-artifact@v4
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
         with:
-          name: InkDensityTool-windows
-          path: data-export/ink-density-tool/dist/InkDensityTool.exe
-          retention-days: 30
+          tag_name: latest
+          name: InkDensityTool (latest)
+          body: "Latest build from main. Download InkDensityTool.exe below."
+          prerelease: false
+          files: data-export/ink-density-tool/dist/InkDensityTool.exe
