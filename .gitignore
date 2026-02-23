@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+
+# PyInstaller output
+data-export/ink-density-tool/dist/
+data-export/ink-density-tool/build/
+data-export/ink-density-tool/*.spec.bak
+
+# App settings (contains local machine paths)
+InkDensityTool/
+
+# Source/reference files not part of the codebase
+DGC-curve-calculator.xlsx
+"Illustrator Templates/"
+"Andrew Kohn CRS XPS CBW SP Print Readings/"
+
+# OS
+.DS_Store
+Thumbs.db
