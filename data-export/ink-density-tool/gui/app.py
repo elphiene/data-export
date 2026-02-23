@@ -1,0 +1,420 @@
+"""Main application window."""
+from __future__ import annotations
+
+import threading
+import tkinter as tk
+from tkinter import ttk, filedialog, messagebox
+
+from core.models import JobConfig, ShapeData, WeightData
+from core.session import save_session, load_session
+from gui.job_config import JobConfigPanel
+from gui.shape_tab import ShapeNotebook
+import settings as app_settings
+
+
+class App(tk.Tk):
+    def __init__(self) -> None:
+        super().__init__()
+        self.title("Ink Density Tool")
+        self.minsize(900, 600)
+        self._current_path: str | None = None
+        self._dirty = False
+
+        self._build_menu()
+        self._build_layout()
+        self._build_status_bar()
+
+        self._load_initial_session()
+
+    # ------------------------------------------------------------------
+    # Menu
+    # ------------------------------------------------------------------
+
+    def _build_menu(self) -> None:
+        menubar = tk.Menu(self)
+        self.config(menu=menubar)
+
+        # File
+        file_menu = tk.Menu(menubar, tearoff=False)
+        menubar.add_cascade(label="File", menu=file_menu)
+        file_menu.add_command(label="New", accelerator="Ctrl+N", command=self._new_job)
+        file_menu.add_command(label="Open…", accelerator="Ctrl+O", command=self._open_session)
+        file_menu.add_separator()
+        file_menu.add_command(label="Save", accelerator="Ctrl+S", command=self._save_session)
+        file_menu.add_command(label="Save As…", accelerator="Ctrl+Shift+S", command=self._save_as)
+        file_menu.add_separator()
+        file_menu.add_command(label="Exit", command=self._on_close)
+
+        self.bind_all("<Control-n>", lambda e: self._new_job())
+        self.bind_all("<Control-o>", lambda e: self._open_session())
+        self.bind_all("<Control-s>", lambda e: self._save_session())
+        self.bind_all("<Control-S>", lambda e: self._save_as())
+
+        # Settings
+        settings_menu = tk.Menu(menubar, tearoff=False)
+        menubar.add_cascade(label="Settings", menu=settings_menu)
+        settings_menu.add_command(label="Illustrator Path…", command=self._set_illustrator_path)
+        settings_menu.add_command(label="Default Templates…", command=self._set_templates)
+
+        # Export
+        export_menu = tk.Menu(menubar, tearoff=False)
+        menubar.add_cascade(label="Export", menu=export_menu)
+        export_menu.add_command(label="Export → Illustrator PDF", command=self._export_pdf)
+        export_menu.add_command(label="Export → Excel", command=self._export_excel)
+
+        self.protocol("WM_DELETE_WINDOW", self._on_close)
+
+    # ------------------------------------------------------------------
+    # Layout
+    # ------------------------------------------------------------------
+
+    def _build_layout(self) -> None:
+        pane = ttk.PanedWindow(self, orient="horizontal")
+        pane.pack(fill="both", expand=True)
+
+        # Left panel
+        left_frame = ttk.Frame(pane, width=200)
+        left_frame.pack_propagate(False)
+        pane.add(left_frame, weight=0)
+
+        self._config_panel = JobConfigPanel(
+            left_frame,
+            on_weights_changed=self._on_weights_changed,
+            on_steps_changed=self._on_steps_changed,
+        )
+        self._config_panel.pack(fill="both", expand=True)
+
+        # Right panel
+        right_frame = ttk.Frame(pane)
+        pane.add(right_frame, weight=1)
+
+        # Shape notebook + toolbar
+        toolbar = ttk.Frame(right_frame)
+        toolbar.pack(fill="x", padx=4, pady=(4, 0))
+
+        self._shape_notebook = ShapeNotebook(right_frame, on_change=self._mark_dirty)
+        self._shape_notebook.pack(fill="both", expand=True, padx=4, pady=4)
+
+        ttk.Button(toolbar, text="+ Add Shape", command=self._add_shape).pack(side="left")
+
+        # Export buttons
+        btn_frame = ttk.Frame(right_frame)
+        btn_frame.pack(fill="x", padx=4, pady=(0, 4))
+        ttk.Button(btn_frame, text="Export → Illustrator PDF", command=self._export_pdf).pack(
+            side="left", padx=(0, 8)
+        )
+        ttk.Button(btn_frame, text="Export → Excel", command=self._export_excel).pack(side="left")
+
+    def _build_status_bar(self) -> None:
+        self._status_var = tk.StringVar(value="Ready")
+        bar = ttk.Label(self, textvariable=self._status_var, anchor="w", relief="sunken")
+        bar.pack(side="bottom", fill="x", padx=2, pady=2)
+
+    # ------------------------------------------------------------------
+    # Session management
+    # ------------------------------------------------------------------
+
+    def _load_initial_session(self) -> None:
+        last = app_settings.get("last_session_path")
+        if last:
+            try:
+                job = load_session(last)
+                self._populate_from_job(job)
+                self._current_path = last
+                self._status("Loaded: " + last)
+                return
+            except Exception:
+                pass
+        # Start with a blank job
+        self._new_job()
+
+    def _new_job(self) -> None:
+        if self._dirty and not self._confirm_discard():
+            return
+        step_labels = self._config_panel.get_step_labels()
+        job = JobConfig(
+            weight_labels=app_settings.get("default_weight_labels", ["120#", "150#", "200#"]),
+            step_labels=step_labels,
+        )
+        # Add one blank shape to start
+        job.shapes = [
+            ShapeData(
+                name="Shape 1",
+                weights=[
+                    WeightData(
+                        label=lbl,
+                        density=[0.0] * 4,
+                        steps=[[0.0] * 4 for _ in step_labels],
+                    )
+                    for lbl in job.weight_labels
+                ],
+            )
+        ]
+        job.template_ai_path = app_settings.get("default_ai_path", "")
+        job.template_xlsx_path = app_settings.get("default_xlsx_path", "")
+        self._populate_from_job(job)
+        self._current_path = None
+        self._dirty = False
+        self.title("Ink Density Tool")
+        self._status("New job")
+
+    def _populate_from_job(self, job: JobConfig) -> None:
+        self._config_panel.populate(job)
+        self._shape_notebook.populate(job.shapes, job.weight_labels, job.step_labels)
+
+    def _collect_job(self) -> JobConfig:
+        meta = self._config_panel.get_metadata()
+        weight_labels = self._config_panel.get_weight_labels()
+        step_labels = self._config_panel.get_step_labels()
+        shapes = self._shape_notebook.get_all_shapes()
+
+        s = app_settings.load()
+        return JobConfig(
+            customer=meta["customer"],
+            print_type=meta["print_type"],
+            stock_desc=meta["stock_desc"],
+            finish=meta["finish"],
+            dot_shape_type=meta["dot_shape_type"],
+            dot_shape_number=meta["dot_shape_number"],
+            date=meta["date"],
+            weight_labels=weight_labels,
+            step_labels=step_labels,
+            shapes=shapes,
+            template_ai_path=s.get("default_ai_path", ""),
+            template_xlsx_path=s.get("default_xlsx_path", ""),
+        )
+
+    def _save_session(self) -> None:
+        if self._current_path is None:
+            self._save_as()
+            return
+        try:
+            save_session(self._collect_job(), self._current_path)
+            self._dirty = False
+            self._status(f"Saved: {self._current_path}")
+        except Exception as exc:
+            messagebox.showerror("Save Error", str(exc))
+
+    def _save_as(self) -> None:
+        path = filedialog.asksaveasfilename(
+            defaultextension=".json",
+            filetypes=[("Ink Density Session", "*.json"), ("All Files", "*.*")],
+        )
+        if not path:
+            return
+        self._current_path = path
+        app_settings.set("last_session_path", path)
+        self._save_session()
+        self.title(f"Ink Density Tool — {path}")
+
+    def _open_session(self) -> None:
+        if self._dirty and not self._confirm_discard():
+            return
+        path = filedialog.askopenfilename(
+            filetypes=[("Ink Density Session", "*.json"), ("All Files", "*.*")]
+        )
+        if not path:
+            return
+        try:
+            job = load_session(path)
+            self._populate_from_job(job)
+            self._current_path = path
+            self._dirty = False
+            app_settings.set("last_session_path", path)
+            self.title(f"Ink Density Tool — {path}")
+            self._status(f"Opened: {path}")
+        except Exception as exc:
+            messagebox.showerror("Open Error", str(exc))
+
+    # ------------------------------------------------------------------
+    # Export
+    # ------------------------------------------------------------------
+
+    def _export_pdf(self) -> None:
+        job = self._collect_job()
+        missing = [
+            f"{n} LPI" for n in (1, 2, 3)
+            if not app_settings.get(f"ai_template_{n}lpi")
+        ]
+        if missing:
+            messagebox.showwarning(
+                "No Template",
+                f"Set the Illustrator template path(s) for {', '.join(missing)} in Settings.",
+            )
+            return
+        out_path = filedialog.asksaveasfilename(
+            defaultextension=".pdf",
+            filetypes=[("PDF", "*.pdf"), ("All Files", "*.*")],
+            title="Save exported PDF",
+        )
+        if not out_path:
+            return
+        self._status("Exporting PDF…")
+        self._run_in_thread(self._do_export_pdf, job, out_path)
+
+    def _do_export_pdf(self, job: JobConfig, out_path: str) -> None:
+        try:
+            from export.illustrator import export_pdf
+            export_pdf(job, out_path)
+            self.after(0, self._status, f"PDF exported: {out_path}")
+        except Exception as exc:
+            self.after(0, messagebox.showerror, "Export Error", str(exc))
+            self.after(0, self._status, "Export failed.")
+
+    def _export_excel(self) -> None:
+        job = self._collect_job()
+        if not job.template_xlsx_path:
+            messagebox.showwarning(
+                "No Template",
+                "Set the Excel template path in Settings before exporting.",
+            )
+            return
+        out_path = filedialog.asksaveasfilename(
+            defaultextension=".xlsx",
+            filetypes=[("Excel Workbook", "*.xlsx"), ("All Files", "*.*")],
+            title="Save exported Excel",
+        )
+        if not out_path:
+            return
+        self._status("Exporting Excel…")
+        self._run_in_thread(self._do_export_excel, job, out_path)
+
+    def _do_export_excel(self, job: JobConfig, out_path: str) -> None:
+        try:
+            from export.excel import export_excel
+            export_excel(job, out_path)
+            self.after(0, self._status, f"Excel exported: {out_path}")
+        except Exception as exc:
+            self.after(0, messagebox.showerror, "Export Error", str(exc))
+            self.after(0, self._status, "Export failed.")
+
+    # ------------------------------------------------------------------
+    # Settings dialogs
+    # ------------------------------------------------------------------
+
+    def _set_illustrator_path(self) -> None:
+        current = app_settings.get("illustrator_path", "")
+        path = filedialog.askopenfilename(
+            title="Select Illustrator.exe",
+            initialfile=current or "Illustrator.exe",
+            filetypes=[("Executable", "*.exe"), ("All Files", "*.*")],
+        )
+        if path:
+            app_settings.set("illustrator_path", path)
+            self._status(f"Illustrator path set: {path}")
+
+    def _set_templates(self) -> None:
+        dialog = _TemplatesDialog(self)
+        self.wait_window(dialog)
+
+    # ------------------------------------------------------------------
+    # Helpers
+    # ------------------------------------------------------------------
+
+    def _add_shape(self) -> None:
+        self._shape_notebook.add_new_shape()
+
+    def _on_weights_changed(self, labels: list[str]) -> None:
+        self._shape_notebook.update_weight_labels(labels)
+        self._mark_dirty()
+
+    def _on_steps_changed(self, step_labels: list[str]) -> None:
+        self._shape_notebook.update_step_labels(step_labels)
+        self._mark_dirty()
+
+    def _mark_dirty(self) -> None:
+        self._dirty = True
+
+    def _status(self, msg: str) -> None:
+        self._status_var.set(f"Status: {msg}")
+
+    def _confirm_discard(self) -> bool:
+        return messagebox.askyesno(
+            "Unsaved Changes", "Discard unsaved changes?"
+        )
+
+    def _on_close(self) -> None:
+        if self._dirty and not self._confirm_discard():
+            return
+        self.destroy()
+
+    def _run_in_thread(self, fn, *args) -> None:
+        threading.Thread(target=fn, args=args, daemon=True).start()
+
+
+# ------------------------------------------------------------------
+# Settings dialog
+# ------------------------------------------------------------------
+
+class _TemplatesDialog(tk.Toplevel):
+    def __init__(self, parent: tk.Widget) -> None:
+        super().__init__(parent)
+        self.title("Template Paths")
+        self.resizable(False, False)
+        self.grab_set()
+
+        s = app_settings.load()
+        self._ai1_var  = tk.StringVar(value=s.get("ai_template_1lpi", ""))
+        self._ai2_var  = tk.StringVar(value=s.get("ai_template_2lpi", ""))
+        self._ai3_var  = tk.StringVar(value=s.get("ai_template_3lpi", ""))
+        self._xlsx_var = tk.StringVar(value=s.get("default_xlsx_path", ""))
+
+        ai_templates = [
+            ("Illustrator template — 1 LPI (.ai):", self._ai1_var),
+            ("Illustrator template — 2 LPI (.ai):", self._ai2_var),
+            ("Illustrator template — 3 LPI (.ai):", self._ai3_var),
+        ]
+
+        row = 0
+        self._ai_vars = [self._ai1_var, self._ai2_var, self._ai3_var]
+        for label_text, var in ai_templates:
+            ttk.Label(self, text=label_text).grid(
+                row=row, column=0, padx=8, pady=(12, 2), sticky="w"
+            )
+            row += 1
+            ttk.Entry(self, textvariable=var, width=48).grid(
+                row=row, column=0, padx=8, pady=2
+            )
+            ttk.Button(
+                self, text="Browse…",
+                command=lambda v=var: self._browse_ai(v),
+            ).grid(row=row, column=1, padx=4)
+            row += 1
+
+        ttk.Label(self, text="Excel template (.xlsx):").grid(
+            row=row, column=0, padx=8, pady=(12, 2), sticky="w"
+        )
+        row += 1
+        ttk.Entry(self, textvariable=self._xlsx_var, width=48).grid(
+            row=row, column=0, padx=8, pady=2
+        )
+        ttk.Button(self, text="Browse…", command=self._browse_xlsx).grid(
+            row=row, column=1, padx=4
+        )
+        row += 1
+
+        btn_frame = ttk.Frame(self)
+        btn_frame.grid(row=row, column=0, columnspan=2, pady=12)
+        ttk.Button(btn_frame, text="Save", command=self._save).pack(side="left", padx=4)
+        ttk.Button(btn_frame, text="Cancel", command=self.destroy).pack(side="left", padx=4)
+
+    def _browse_ai(self, var: tk.StringVar) -> None:
+        path = filedialog.askopenfilename(
+            filetypes=[("Illustrator", "*.ai"), ("All Files", "*.*")]
+        )
+        if path:
+            var.set(path)
+
+    def _browse_xlsx(self) -> None:
+        path = filedialog.askopenfilename(
+            filetypes=[("Excel Workbook", "*.xlsx"), ("All Files", "*.*")]
+        )
+        if path:
+            self._xlsx_var.set(path)
+
+    def _save(self) -> None:
+        app_settings.set("ai_template_1lpi", self._ai1_var.get())
+        app_settings.set("ai_template_2lpi", self._ai2_var.get())
+        app_settings.set("ai_template_3lpi", self._ai3_var.get())
+        app_settings.set("default_xlsx_path", self._xlsx_var.get())
+        self.destroy()
