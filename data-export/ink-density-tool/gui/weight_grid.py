@@ -100,8 +100,14 @@ class WeightGrid(ttk.Frame):
         return entry
 
     def _setup_tab_order(self) -> None:
-        """Bind Tab/Shift-Tab to move through entries left→right, top→bottom."""
-        flat = [e for row in self._entries for e in row]
+        """Bind Tab/Shift-Tab column-major: all rows for C, then M, then Y, then K.
+
+        This matches the eXact scan sequence: density → 100 → 95 → … → last step
+        for each colour in turn, with DataCatcher sending Tab after each reading.
+        """
+        num_rows = len(self._entries)
+        num_cols = 4
+        flat = [self._entries[row][col] for col in range(num_cols) for row in range(num_rows)]
         for i, entry in enumerate(flat):
             prev_entry = flat[i - 1] if i > 0 else flat[-1]
             next_entry = flat[(i + 1) % len(flat)]
