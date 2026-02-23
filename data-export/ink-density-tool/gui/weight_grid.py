@@ -26,10 +26,12 @@ class WeightGrid(ttk.Frame):
         weight_data: WeightData | None = None,
         on_change: Callable[[], None] | None = None,
         step_labels: list[str] | None = None,
+        on_complete: Callable[[], None] | None = None,
         **kwargs,
     ) -> None:
         super().__init__(parent, **kwargs)
         self._on_change = on_change
+        self._on_complete = on_complete
         self._step_labels = step_labels if step_labels is not None else list(STEP_LABELS_14)
         self._entries: list[list[tk.Entry]] = []  # [row][col], row 0 = density row
         self._vars: list[list[tk.StringVar]] = []
@@ -83,6 +85,7 @@ class WeightGrid(ttk.Frame):
             self._vars.append(row_vars)
 
         self._setup_tab_order()
+        self._lock_100_row()
 
     def _make_entry(
         self, var: tk.StringVar, row: int, col: int, pady: int | tuple = 1
@@ -97,24 +100,47 @@ class WeightGrid(ttk.Frame):
             validatecommand=vcmd,
         )
         entry.grid(row=row, column=col, padx=2, pady=pady, sticky="ew")
+        default_bg = entry.cget("background")
+        entry.bind("<FocusIn>",  lambda e, w=entry: w.config(background="#fffacd"))
+        entry.bind("<FocusOut>", lambda e, w=entry, bg=default_bg: w.config(background=bg))
         return entry
+
+    def _lock_100_row(self) -> None:
+        """Lock the 100% step row: always shows 100, disabled, skipped by Tab."""
+        for col in range(4):
+            self._vars[1][col].set("100")
+            self._entries[1][col].config(state="disabled")
 
     def _setup_tab_order(self) -> None:
         """Bind Tab/Shift-Tab column-major: all rows for C, then M, then Y, then K.
 
-        This matches the eXact scan sequence: density → 100 → 95 → … → last step
-        for each colour in turn, with DataCatcher sending Tab after each reading.
+        Row 1 (the 100% step) is locked and excluded — Tab goes density → 95 → …
         """
+        def _make_tab_handler(target):
+            def handler(event):
+                target.focus_set()
+                return "break"
+            return handler
+
         num_rows = len(self._entries)
         num_cols = 4
-        flat = [self._entries[row][col] for col in range(num_cols) for row in range(num_rows)]
+        # Row 1 is the 100% step — locked, excluded from Tab order
+        flat = [
+            self._entries[row][col]
+            for col in range(num_cols)
+            for row in range(num_rows)
+            if row != 1
+        ]
         for i, entry in enumerate(flat):
             prev_entry = flat[i - 1] if i > 0 else flat[-1]
-            next_entry = flat[(i + 1) % len(flat)]
-            entry.bind("<Tab>", lambda e, nxt=next_entry: (nxt.focus_set(), "break"))
-            entry.bind(
-                "<Shift-Tab>", lambda e, prv=prev_entry: (prv.focus_set(), "break")
-            )
+
+            if i == len(flat) - 1 and self._on_complete:
+                entry.bind("<Tab>", lambda e: self._on_complete() or "break")
+            else:
+                next_entry = flat[(i + 1) % len(flat)]
+                entry.bind("<Tab>", _make_tab_handler(next_entry))
+
+            entry.bind("<Shift-Tab>", _make_tab_handler(prev_entry))
 
     # ------------------------------------------------------------------
     # Validation
@@ -177,12 +203,14 @@ class WeightGrid(ttk.Frame):
             for col in range(4):
                 v = weight_data.steps[row][col] if row < len(weight_data.steps) else 0.0
                 self._vars[row + 1][col].set(fmt(v))
+        self._lock_100_row()
 
     def clear(self) -> None:
         """Clear all entries."""
         for row_vars in self._vars:
             for var in row_vars:
                 var.set("")
+        self._lock_100_row()
 
     def focus_first(self) -> None:
         """Focus the first entry (top-left)."""

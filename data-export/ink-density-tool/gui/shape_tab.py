@@ -74,6 +74,7 @@ class _ShapeTab(ttk.Frame):
                 weight_data=weight_data,
                 on_change=self._on_change,
                 step_labels=step_labels,
+                on_complete=lambda i=i: self._advance_weight(i),
             )
             grid.pack(padx=8, pady=8)
             self._grids.append(grid)
@@ -95,6 +96,14 @@ class _ShapeTab(ttk.Frame):
             inner.bind("<MouseWheel>", _on_mousewheel)
 
             self._notebook.add(container, text=label)
+
+    def _advance_weight(self, index: int) -> None:
+        if index < len(self._grids) - 1:
+            self._notebook.select(index + 1)
+            self._grids[index + 1].focus_first()
+        else:
+            # Last weight tab — wrap to C-density of the same grid
+            self._grids[index].focus_first()
 
     def update_weight_labels(
         self,
