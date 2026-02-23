@@ -263,12 +263,6 @@ class App(tk.Tk):
 
     def _export_excel(self) -> None:
         job = self._collect_job()
-        if not job.template_xlsx_path:
-            messagebox.showwarning(
-                "No Template",
-                "Set the Excel template path in Settings before exporting.",
-            )
-            return
         out_path = filedialog.asksaveasfilename(
             defaultextension=".xlsx",
             filetypes=[("Excel Workbook", "*.xlsx"), ("All Files", "*.*")],
@@ -354,43 +348,57 @@ class _TemplatesDialog(tk.Toplevel):
         self.grab_set()
 
         s = app_settings.load()
-        self._ai1_var  = tk.StringVar(value=s.get("ai_template_1lpi", ""))
-        self._ai2_var  = tk.StringVar(value=s.get("ai_template_2lpi", ""))
-        self._ai3_var  = tk.StringVar(value=s.get("ai_template_3lpi", ""))
-        self._xlsx_var = tk.StringVar(value=s.get("default_xlsx_path", ""))
 
-        ai_templates = [
-            ("Illustrator template — 1 LPI (.ai):", self._ai1_var),
-            ("Illustrator template — 2 LPI (.ai):", self._ai2_var),
-            ("Illustrator template — 3 LPI (.ai):", self._ai3_var),
-        ]
+        # Standard AI template vars
+        self._ai1_std  = tk.StringVar(value=s.get("ai_template_1lpi", ""))
+        self._ai2_std  = tk.StringVar(value=s.get("ai_template_2lpi", ""))
+        self._ai3_std  = tk.StringVar(value=s.get("ai_template_3lpi", ""))
+        # Extended AI template vars
+        self._ai1_ext  = tk.StringVar(value=s.get("ai_template_1lpi_extended", ""))
+        self._ai2_ext  = tk.StringVar(value=s.get("ai_template_2lpi_extended", ""))
+        self._ai3_ext  = tk.StringVar(value=s.get("ai_template_3lpi_extended", ""))
 
         row = 0
-        self._ai_vars = [self._ai1_var, self._ai2_var, self._ai3_var]
-        for label_text, var in ai_templates:
-            ttk.Label(self, text=label_text).grid(
-                row=row, column=0, padx=8, pady=(12, 2), sticky="w"
-            )
-            row += 1
-            ttk.Entry(self, textvariable=var, width=48).grid(
-                row=row, column=0, padx=8, pady=2
-            )
-            ttk.Button(
-                self, text="Browse…",
-                command=lambda v=var: self._browse_ai(v),
-            ).grid(row=row, column=1, padx=4)
-            row += 1
 
-        ttk.Label(self, text="Excel template (.xlsx):").grid(
-            row=row, column=0, padx=8, pady=(12, 2), sticky="w"
+        ttk.Label(self, text="Illustrator — Standard (100→1)", font=("", 9, "bold")).grid(
+            row=row, column=0, padx=8, pady=(12, 4), sticky="w"
         )
         row += 1
-        ttk.Entry(self, textvariable=self._xlsx_var, width=48).grid(
-            row=row, column=0, padx=8, pady=2
+        for label_text, var in [
+            ("1 LPI (.ai):", self._ai1_std),
+            ("2 LPI (.ai):", self._ai2_std),
+            ("3 LPI (.ai):", self._ai3_std),
+        ]:
+            ttk.Label(self, text=label_text).grid(row=row, column=0, padx=16, pady=(4, 2), sticky="w")
+            row += 1
+            ttk.Entry(self, textvariable=var, width=48).grid(row=row, column=0, padx=16, pady=2)
+            ttk.Button(self, text="Browse…", command=lambda v=var: self._browse_ai(v)).grid(
+                row=row, column=1, padx=4
+            )
+            row += 1
+
+        ttk.Label(self, text="Illustrator — Extended (100→0.4)", font=("", 9, "bold")).grid(
+            row=row, column=0, padx=8, pady=(12, 4), sticky="w"
         )
-        ttk.Button(self, text="Browse…", command=self._browse_xlsx).grid(
-            row=row, column=1, padx=4
-        )
+        row += 1
+        for label_text, var in [
+            ("1 LPI (.ai):", self._ai1_ext),
+            ("2 LPI (.ai):", self._ai2_ext),
+            ("3 LPI (.ai):", self._ai3_ext),
+        ]:
+            ttk.Label(self, text=label_text).grid(row=row, column=0, padx=16, pady=(4, 2), sticky="w")
+            row += 1
+            ttk.Entry(self, textvariable=var, width=48).grid(row=row, column=0, padx=16, pady=2)
+            ttk.Button(self, text="Browse…", command=lambda v=var: self._browse_ai(v)).grid(
+                row=row, column=1, padx=4
+            )
+            row += 1
+
+        ttk.Label(
+            self,
+            text="Excel templates are selected automatically from assets/\n(template_standard.xlsx or template_extended.xlsx).",
+            foreground="grey",
+        ).grid(row=row, column=0, columnspan=2, padx=8, pady=(12, 4), sticky="w")
         row += 1
 
         btn_frame = ttk.Frame(self)
@@ -405,16 +413,11 @@ class _TemplatesDialog(tk.Toplevel):
         if path:
             var.set(path)
 
-    def _browse_xlsx(self) -> None:
-        path = filedialog.askopenfilename(
-            filetypes=[("Excel Workbook", "*.xlsx"), ("All Files", "*.*")]
-        )
-        if path:
-            self._xlsx_var.set(path)
-
     def _save(self) -> None:
-        app_settings.set("ai_template_1lpi", self._ai1_var.get())
-        app_settings.set("ai_template_2lpi", self._ai2_var.get())
-        app_settings.set("ai_template_3lpi", self._ai3_var.get())
-        app_settings.set("default_xlsx_path", self._xlsx_var.get())
+        app_settings.set("ai_template_1lpi", self._ai1_std.get())
+        app_settings.set("ai_template_2lpi", self._ai2_std.get())
+        app_settings.set("ai_template_3lpi", self._ai3_std.get())
+        app_settings.set("ai_template_1lpi_extended", self._ai1_ext.get())
+        app_settings.set("ai_template_2lpi_extended", self._ai2_ext.get())
+        app_settings.set("ai_template_3lpi_extended", self._ai3_ext.get())
         self.destroy()

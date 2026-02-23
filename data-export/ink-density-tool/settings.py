@@ -18,7 +18,9 @@ _DEFAULTS: dict = {
     "ai_template_1lpi": "",
     "ai_template_2lpi": "",
     "ai_template_3lpi": "",
-    "default_xlsx_path": "",
+    "ai_template_1lpi_extended": "",
+    "ai_template_2lpi_extended": "",
+    "ai_template_3lpi_extended": "",
     "default_weight_labels": ["120#", "150#", "200#"],
     "default_step_labels": [
         "100", "95", "90", "80", "70", "60", "50", "40", "30", "20", "10", "5", "3", "1"

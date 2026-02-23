@@ -35,6 +35,7 @@ Template structure (DGC-curve-calculator.xlsx) — confirmed from file inspectio
 """
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 import openpyxl
@@ -46,25 +47,48 @@ from core.models import JobConfig, ShapeData
 
 # Row where step data starts (first table, both sheet types)
 _STEP_START_ROW_T1 = 4
-# Row where step data starts (second table, dual-weight sheets only)
-_STEP_START_ROW_T2 = 27
-# Fixed label rows — template has formatting here regardless of step count
-# (16-step fills rows 4-19, label at 20; 14-step fills rows 4-17, label still at 20)
-_LABEL_ROW_T1 = 20
-_LABEL_ROW_T2 = 43
+# Gap (in rows) between the T1 label row and the T2 step-start row
+_GAP_T1_TO_T2 = 7
 # CMYK data columns: B=2, C=3, D=4, E=5
 _DATA_COLS = [2, 3, 4, 5]
 
 
+def _row_constants(num_steps: int) -> tuple[int, int, int]:
+    """Return (label_t1, step_start_t2, label_t2) for a given step count.
+
+    Derivation (verified against both bundled templates):
+      label_t1      = STEP_START_T1 + num_steps          (label immediately follows last step)
+      step_start_t2 = label_t1 + GAP_T1_TO_T2
+      label_t2      = step_start_t2 + num_steps
+    """
+    label_t1 = _STEP_START_ROW_T1 + num_steps
+    step_start_t2 = label_t1 + _GAP_T1_TO_T2
+    label_t2 = step_start_t2 + num_steps
+    return label_t1, step_start_t2, label_t2
+
+
+def _bundled_template(num_steps: int) -> Path:
+    """Return the path to the bundled template matching the step count."""
+    base = Path(sys._MEIPASS) if getattr(sys, "frozen", False) else Path(__file__).parent.parent
+    name = "template_extended.xlsx" if num_steps > 14 else "template_standard.xlsx"
+    return base / "assets" / name
+
+
 def export_excel(job: JobConfig, output_path: str) -> None:
     """Fill the Excel template from job data and save to output_path."""
-    template_path = Path(job.template_xlsx_path)
+    num_steps = len(job.step_labels)
+
+    # Use explicit override path if set, otherwise auto-select bundled template
+    if job.template_xlsx_path:
+        template_path = Path(job.template_xlsx_path)
+    else:
+        template_path = _bundled_template(num_steps)
+
     if not template_path.is_file():
         raise FileNotFoundError(f"Excel template not found: {template_path}")
 
-    num_steps = len(job.step_labels)
-
     wb = openpyxl.load_workbook(str(template_path))
+    label_t1, step_start_t2, label_t2 = _row_constants(num_steps)
 
     title = " ".join(filter(None, [
         job.customer, job.print_type, job.stock_desc, job.finish
@@ -78,7 +102,7 @@ def export_excel(job: JobConfig, output_path: str) -> None:
 
         # If the template doesn't have enough sheets, add new ones by copying
         while len(wb.sheetnames) <= dual_idx:
-            _append_sheet_pair(wb)
+            _append_sheet_pair(wb, num_steps)
 
         ws_single = wb[wb.sheetnames[single_idx]]
         ws_dual   = wb[wb.sheetnames[dual_idx]]
@@ -88,25 +112,24 @@ def export_excel(job: JobConfig, output_path: str) -> None:
         if len(shape.weights) > 0:
             w0 = shape.weights[0]
             _write_steps(ws_single, w0.steps, _STEP_START_ROW_T1, num_steps)
-            ws_single[f"A{_LABEL_ROW_T1}"] = w0.label
-            ws_single[f"I{_LABEL_ROW_T1}"] = dot_shape
+            ws_single[f"A{label_t1}"] = w0.label
+            ws_single[f"I{label_t1}"] = dot_shape
 
         # --- Dual sheet: weight[1] (first table) ---
         _write_metadata(ws_dual, title, job.date)
         if len(shape.weights) > 1:
             w1 = shape.weights[1]
             _write_steps(ws_dual, w1.steps, _STEP_START_ROW_T1, num_steps)
-            ws_dual[f"A{_LABEL_ROW_T1}"] = w1.label
-            ws_dual[f"I{_LABEL_ROW_T1}"] = dot_shape
+            ws_dual[f"A{label_t1}"] = w1.label
+            ws_dual[f"I{label_t1}"] = dot_shape
 
         # --- Dual sheet: weight[2] (second table) ---
         if len(shape.weights) > 2:
             w2 = shape.weights[2]
-            _write_steps(ws_dual, w2.steps, _STEP_START_ROW_T2, num_steps)
-            ws_dual[f"A{_LABEL_ROW_T2}"] = w2.label
-            ws_dual[f"I{_LABEL_ROW_T2}"] = dot_shape
-            # Fix the copy-paste formula bug: F27:F40 referenced wrong rows
-            _fix_second_table_formulas(ws_dual, _STEP_START_ROW_T2, num_steps)
+            _write_steps(ws_dual, w2.steps, step_start_t2, num_steps)
+            ws_dual[f"A{label_t2}"] = w2.label
+            ws_dual[f"I{label_t2}"] = dot_shape
+            _fix_second_table_formulas(ws_dual, step_start_t2, num_steps)
 
     # Apply A4 page setup to all worksheets
     for ws in wb.worksheets:
@@ -163,21 +186,23 @@ def _fix_second_table_formulas(ws, start_row: int, num_steps: int) -> None:
         ws.cell(row=r, column=6, value=f"=SUM(B{r}:E{r})/4")
 
 
-def _append_sheet_pair(wb: openpyxl.Workbook) -> None:
+def _append_sheet_pair(wb: openpyxl.Workbook, num_steps: int) -> None:
     """Add a blank single+dual sheet pair by copying Sheet1/Sheet2 structure."""
     existing = wb.sheetnames
-    # Copy Sheet1 → new single sheet, Sheet2 → new dual sheet
     src_single = wb[existing[0]]
     src_dual   = wb[existing[1]]
 
     new_single = wb.copy_worksheet(src_single)
     new_dual   = wb.copy_worksheet(src_dual)
 
-    # Clear only the data cells (B4:E19 and B27:E44) in copied sheets
+    _, step_start_t2, _ = _row_constants(num_steps)
+    t1_clear_end = _STEP_START_ROW_T1 + num_steps + 1
+    t2_clear_end = step_start_t2 + num_steps + 1
+
     for ws in (new_single, new_dual):
-        for row in range(4, 22):
+        for row in range(_STEP_START_ROW_T1, t1_clear_end):
             for col in range(2, 6):
                 ws.cell(row=row, column=col, value=None)
-    for row in range(27, 45):
+    for row in range(step_start_t2, t2_clear_end):
         for col in range(2, 6):
             new_dual.cell(row=row, column=col, value=None)

@@ -51,12 +51,13 @@ def find_illustrator() -> str | None:
     return None
 
 
-def _get_lpi_templates() -> dict[int, str]:
-    """Return {1: path, 2: path, 3: path} from settings."""
+def _get_lpi_templates(num_steps: int) -> dict[int, str]:
+    """Return {1: path, 2: path, 3: path} from settings, choosing standard/extended by step count."""
+    suffix = "_extended" if num_steps > 14 else ""
     return {
-        1: app_settings.get("ai_template_1lpi", ""),
-        2: app_settings.get("ai_template_2lpi", ""),
-        3: app_settings.get("ai_template_3lpi", ""),
+        1: app_settings.get(f"ai_template_1lpi{suffix}", ""),
+        2: app_settings.get(f"ai_template_2lpi{suffix}", ""),
+        3: app_settings.get(f"ai_template_3lpi{suffix}", ""),
     }
 
 
@@ -129,7 +130,8 @@ def export_pdf(job: JobConfig, output_path: str) -> None:
             "Illustrator.exe not found. Please set the path in Settings."
         )
 
-    lpi_templates = _get_lpi_templates()
+    num_steps = len(job.step_labels)
+    lpi_templates = _get_lpi_templates(num_steps)
     missing = [n for n in (1, 2, 3) if not lpi_templates[n] or not Path(lpi_templates[n]).is_file()]
     if missing:
         raise RuntimeError(
