@@ -115,6 +115,7 @@ class WeightGrid(ttk.Frame):
         """Bind Tab/Shift-Tab column-major: all rows for C, then M, then Y, then K.
 
         Row 1 (the 100% step) is locked and excluded — Tab goes density → 95 → …
+        Return is bound identically to Tab for DataCatcher compatibility.
         """
         def _make_tab_handler(target):
             def handler(event):
@@ -131,14 +132,19 @@ class WeightGrid(ttk.Frame):
             for row in range(num_rows)
             if row != 1
         ]
+        self._flat_order = flat
+        self._flat_index = {id(e): i for i, e in enumerate(flat)}
+
         for i, entry in enumerate(flat):
             prev_entry = flat[i - 1] if i > 0 else flat[-1]
 
             if i == len(flat) - 1 and self._on_complete:
                 entry.bind("<Tab>", lambda e: self._on_complete() or "break")
+                entry.bind("<Return>", lambda e: self._on_complete() or "break")
             else:
                 next_entry = flat[(i + 1) % len(flat)]
                 entry.bind("<Tab>", _make_tab_handler(next_entry))
+                entry.bind("<Return>", _make_tab_handler(next_entry))
 
             entry.bind("<Shift-Tab>", _make_tab_handler(prev_entry))
 
@@ -164,7 +170,50 @@ class WeightGrid(ttk.Frame):
         def _trace(*_):
             if self._on_change:
                 self._on_change()
+            # Auto-advance when value settles — handles DataCatcher injection
+            # regardless of whether it sends Tab, Return, or neither.
+            # Only fires when this entry actually has focus (not during load/clear).
+            entry = self._entries[row][col]
+            try:
+                if entry.focus_get() is entry:
+                    self._schedule_settle_advance(row, col)
+            except Exception:
+                pass
         return _trace
+
+    def _schedule_settle_advance(self, row: int, col: int) -> None:
+        """(Re)schedule a 300 ms settle timer; fires _settle_advance if still focused."""
+        entry = self._entries[row][col]
+        # Don't schedule for the locked 100% row
+        if str(entry.cget("state")) == "disabled":
+            return
+        after_id = getattr(entry, "_settle_id", None)
+        if after_id is not None:
+            try:
+                entry.after_cancel(after_id)
+            except Exception:
+                pass
+        entry._settle_id = entry.after(300, lambda: self._settle_advance(row, col))
+
+    def _settle_advance(self, row: int, col: int) -> None:
+        """Advance focus to the next entry if this one is still focused and non-empty."""
+        entry = self._entries[row][col]
+        entry._settle_id = None
+        try:
+            if entry.focus_get() is not entry:
+                return
+        except Exception:
+            return
+        if not self._vars[row][col].get():
+            return
+        idx = getattr(self, "_flat_index", {}).get(id(entry))
+        if idx is None:
+            return
+        flat = self._flat_order
+        if idx == len(flat) - 1 and self._on_complete:
+            self._on_complete()
+        elif idx < len(flat) - 1:
+            flat[idx + 1].focus_set()
 
     # ------------------------------------------------------------------
     # Public interface
