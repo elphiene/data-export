@@ -1,23 +1,23 @@
 /**
  * runner.jsx — Ink Density Tool ExtendScript template
  *
- * Python generates a filled copy of this file per dot shape, replacing every
- * <<PLACEHOLDER>> with a real value before calling:
+ * Python generates a filled copy of this file per dot shape, replacing the
+ * two special tokens below before calling:
  *   Illustrator.exe /b <filled_script.jsx>
  *
- * Special tokens replaced by Python (not data placeholders):
- *   <<TEMPLATE_PATH>>   — absolute path to the master .ai template
- *   <<OUTPUT_PDF>>      — absolute path where the PDF should be saved
- *
- * Data placeholders replaced by Python before the script runs — all of the
- * <<CUSTOMER>>, <<W1_R01_C>>, etc. tokens below are already substituted by
- * the time Illustrator sees this file.
+ * Tokens replaced by Python:
+ *   <<REPLACEMENTS_DICT>>  — injected as a complete JSX object literal:
+ *                            { "<<CUSTOMER>>": "Andrew Kohn", "<<DATE>>": "24-02-2026", … }
+ *                            Keys are the placeholder strings in the master .ai template.
+ *                            Values are the actual job data.
+ *   <<TEMPLATE_PATH>>      — absolute path to the master .ai template (forward slashes)
+ *   <<OUTPUT_PDF>>         — absolute path where the PDF should be saved (forward slashes)
  *
  * ============================================================
  * ILLUSTRATOR TEMPLATE SETUP GUIDE
  * ============================================================
  * In the master .ai file, each variable text frame must contain
- * exactly one of the placeholder strings below as its content.
+ * exactly one of the placeholder strings listed below as its ENTIRE content.
  *
  * Artboard: set to A4 (210 × 297 mm) so PDF exports at A4 size.
  *
@@ -58,82 +58,11 @@
     var doc = app.open(templateFile);
 
     // ---------------------------------------------------------------------------
-    // 2. Build the replacement dictionary
-    //    All values are pre-substituted by Python; this object is just a map
-    //    of what is still in the document as placeholder text.
+    // 2. Replacement dictionary — generated and injected by Python.
+    //    Keys are the placeholder strings in the template text frames.
+    //    Values are the actual job data for this export.
     // ---------------------------------------------------------------------------
-    var replacements = {
-        // Metadata
-        "<<CUSTOMER>>": "<<CUSTOMER>>",
-        "<<STOCK>>":    "<<STOCK>>",
-        "<<CRS>>":      "<<CRS>>",
-        "<<DATE>>":     "<<DATE>>",
-        "<<SHAPE>>":    "<<SHAPE>>",
-
-        // Weight labels
-        "<<W1_LABEL>>": "<<W1_LABEL>>",
-        "<<W2_LABEL>>": "<<W2_LABEL>>",
-        "<<W3_LABEL>>": "<<W3_LABEL>>",
-
-        // Density rows
-        "<<W1_DC>>": "<<W1_DC>>", "<<W1_DM>>": "<<W1_DM>>", "<<W1_DY>>": "<<W1_DY>>", "<<W1_DK>>": "<<W1_DK>>",
-        "<<W2_DC>>": "<<W2_DC>>", "<<W2_DM>>": "<<W2_DM>>", "<<W2_DY>>": "<<W2_DY>>", "<<W2_DK>>": "<<W2_DK>>",
-        "<<W3_DC>>": "<<W3_DC>>", "<<W3_DM>>": "<<W3_DM>>", "<<W3_DY>>": "<<W3_DY>>", "<<W3_DK>>": "<<W3_DK>>",
-
-        // Step rows W1 R01–R16
-        "<<W1_R01_C>>": "<<W1_R01_C>>", "<<W1_R01_M>>": "<<W1_R01_M>>", "<<W1_R01_Y>>": "<<W1_R01_Y>>", "<<W1_R01_K>>": "<<W1_R01_K>>",
-        "<<W1_R02_C>>": "<<W1_R02_C>>", "<<W1_R02_M>>": "<<W1_R02_M>>", "<<W1_R02_Y>>": "<<W1_R02_Y>>", "<<W1_R02_K>>": "<<W1_R02_K>>",
-        "<<W1_R03_C>>": "<<W1_R03_C>>", "<<W1_R03_M>>": "<<W1_R03_M>>", "<<W1_R03_Y>>": "<<W1_R03_Y>>", "<<W1_R03_K>>": "<<W1_R03_K>>",
-        "<<W1_R04_C>>": "<<W1_R04_C>>", "<<W1_R04_M>>": "<<W1_R04_M>>", "<<W1_R04_Y>>": "<<W1_R04_Y>>", "<<W1_R04_K>>": "<<W1_R04_K>>",
-        "<<W1_R05_C>>": "<<W1_R05_C>>", "<<W1_R05_M>>": "<<W1_R05_M>>", "<<W1_R05_Y>>": "<<W1_R05_Y>>", "<<W1_R05_K>>": "<<W1_R05_K>>",
-        "<<W1_R06_C>>": "<<W1_R06_C>>", "<<W1_R06_M>>": "<<W1_R06_M>>", "<<W1_R06_Y>>": "<<W1_R06_Y>>", "<<W1_R06_K>>": "<<W1_R06_K>>",
-        "<<W1_R07_C>>": "<<W1_R07_C>>", "<<W1_R07_M>>": "<<W1_R07_M>>", "<<W1_R07_Y>>": "<<W1_R07_Y>>", "<<W1_R07_K>>": "<<W1_R07_K>>",
-        "<<W1_R08_C>>": "<<W1_R08_C>>", "<<W1_R08_M>>": "<<W1_R08_M>>", "<<W1_R08_Y>>": "<<W1_R08_Y>>", "<<W1_R08_K>>": "<<W1_R08_K>>",
-        "<<W1_R09_C>>": "<<W1_R09_C>>", "<<W1_R09_M>>": "<<W1_R09_M>>", "<<W1_R09_Y>>": "<<W1_R09_Y>>", "<<W1_R09_K>>": "<<W1_R09_K>>",
-        "<<W1_R10_C>>": "<<W1_R10_C>>", "<<W1_R10_M>>": "<<W1_R10_M>>", "<<W1_R10_Y>>": "<<W1_R10_Y>>", "<<W1_R10_K>>": "<<W1_R10_K>>",
-        "<<W1_R11_C>>": "<<W1_R11_C>>", "<<W1_R11_M>>": "<<W1_R11_M>>", "<<W1_R11_Y>>": "<<W1_R11_Y>>", "<<W1_R11_K>>": "<<W1_R11_K>>",
-        "<<W1_R12_C>>": "<<W1_R12_C>>", "<<W1_R12_M>>": "<<W1_R12_M>>", "<<W1_R12_Y>>": "<<W1_R12_Y>>", "<<W1_R12_K>>": "<<W1_R12_K>>",
-        "<<W1_R13_C>>": "<<W1_R13_C>>", "<<W1_R13_M>>": "<<W1_R13_M>>", "<<W1_R13_Y>>": "<<W1_R13_Y>>", "<<W1_R13_K>>": "<<W1_R13_K>>",
-        "<<W1_R14_C>>": "<<W1_R14_C>>", "<<W1_R14_M>>": "<<W1_R14_M>>", "<<W1_R14_Y>>": "<<W1_R14_Y>>", "<<W1_R14_K>>": "<<W1_R14_K>>",
-        "<<W1_R15_C>>": "<<W1_R15_C>>", "<<W1_R15_M>>": "<<W1_R15_M>>", "<<W1_R15_Y>>": "<<W1_R15_Y>>", "<<W1_R15_K>>": "<<W1_R15_K>>",
-        "<<W1_R16_C>>": "<<W1_R16_C>>", "<<W1_R16_M>>": "<<W1_R16_M>>", "<<W1_R16_Y>>": "<<W1_R16_Y>>", "<<W1_R16_K>>": "<<W1_R16_K>>",
-
-        // Step rows W2 R01–R16
-        "<<W2_R01_C>>": "<<W2_R01_C>>", "<<W2_R01_M>>": "<<W2_R01_M>>", "<<W2_R01_Y>>": "<<W2_R01_Y>>", "<<W2_R01_K>>": "<<W2_R01_K>>",
-        "<<W2_R02_C>>": "<<W2_R02_C>>", "<<W2_R02_M>>": "<<W2_R02_M>>", "<<W2_R02_Y>>": "<<W2_R02_Y>>", "<<W2_R02_K>>": "<<W2_R02_K>>",
-        "<<W2_R03_C>>": "<<W2_R03_C>>", "<<W2_R03_M>>": "<<W2_R03_M>>", "<<W2_R03_Y>>": "<<W2_R03_Y>>", "<<W2_R03_K>>": "<<W2_R03_K>>",
-        "<<W2_R04_C>>": "<<W2_R04_C>>", "<<W2_R04_M>>": "<<W2_R04_M>>", "<<W2_R04_Y>>": "<<W2_R04_Y>>", "<<W2_R04_K>>": "<<W2_R04_K>>",
-        "<<W2_R05_C>>": "<<W2_R05_C>>", "<<W2_R05_M>>": "<<W2_R05_M>>", "<<W2_R05_Y>>": "<<W2_R05_Y>>", "<<W2_R05_K>>": "<<W2_R05_K>>",
-        "<<W2_R06_C>>": "<<W2_R06_C>>", "<<W2_R06_M>>": "<<W2_R06_M>>", "<<W2_R06_Y>>": "<<W2_R06_Y>>", "<<W2_R06_K>>": "<<W2_R06_K>>",
-        "<<W2_R07_C>>": "<<W2_R07_C>>", "<<W2_R07_M>>": "<<W2_R07_M>>", "<<W2_R07_Y>>": "<<W2_R07_Y>>", "<<W2_R07_K>>": "<<W2_R07_K>>",
-        "<<W2_R08_C>>": "<<W2_R08_C>>", "<<W2_R08_M>>": "<<W2_R08_M>>", "<<W2_R08_Y>>": "<<W2_R08_Y>>", "<<W2_R08_K>>": "<<W2_R08_K>>",
-        "<<W2_R09_C>>": "<<W2_R09_C>>", "<<W2_R09_M>>": "<<W2_R09_M>>", "<<W2_R09_Y>>": "<<W2_R09_Y>>", "<<W2_R09_K>>": "<<W2_R09_K>>",
-        "<<W2_R10_C>>": "<<W2_R10_C>>", "<<W2_R10_M>>": "<<W2_R10_M>>", "<<W2_R10_Y>>": "<<W2_R10_Y>>", "<<W2_R10_K>>": "<<W2_R10_K>>",
-        "<<W2_R11_C>>": "<<W2_R11_C>>", "<<W2_R11_M>>": "<<W2_R11_M>>", "<<W2_R11_Y>>": "<<W2_R11_Y>>", "<<W2_R11_K>>": "<<W2_R11_K>>",
-        "<<W2_R12_C>>": "<<W2_R12_C>>", "<<W2_R12_M>>": "<<W2_R12_M>>", "<<W2_R12_Y>>": "<<W2_R12_Y>>", "<<W2_R12_K>>": "<<W2_R12_K>>",
-        "<<W2_R13_C>>": "<<W2_R13_C>>", "<<W2_R13_M>>": "<<W2_R13_M>>", "<<W2_R13_Y>>": "<<W2_R13_Y>>", "<<W2_R13_K>>": "<<W2_R13_K>>",
-        "<<W2_R14_C>>": "<<W2_R14_C>>", "<<W2_R14_M>>": "<<W2_R14_M>>", "<<W2_R14_Y>>": "<<W2_R14_Y>>", "<<W2_R14_K>>": "<<W2_R14_K>>",
-        "<<W2_R15_C>>": "<<W2_R15_C>>", "<<W2_R15_M>>": "<<W2_R15_M>>", "<<W2_R15_Y>>": "<<W2_R15_Y>>", "<<W2_R15_K>>": "<<W2_R15_K>>",
-        "<<W2_R16_C>>": "<<W2_R16_C>>", "<<W2_R16_M>>": "<<W2_R16_M>>", "<<W2_R16_Y>>": "<<W2_R16_Y>>", "<<W2_R16_K>>": "<<W2_R16_K>>",
-
-        // Step rows W3 R01–R16
-        "<<W3_R01_C>>": "<<W3_R01_C>>", "<<W3_R01_M>>": "<<W3_R01_M>>", "<<W3_R01_Y>>": "<<W3_R01_Y>>", "<<W3_R01_K>>": "<<W3_R01_K>>",
-        "<<W3_R02_C>>": "<<W3_R02_C>>", "<<W3_R02_M>>": "<<W3_R02_M>>", "<<W3_R02_Y>>": "<<W3_R02_Y>>", "<<W3_R02_K>>": "<<W3_R02_K>>",
-        "<<W3_R03_C>>": "<<W3_R03_C>>", "<<W3_R03_M>>": "<<W3_R03_M>>", "<<W3_R03_Y>>": "<<W3_R03_Y>>", "<<W3_R03_K>>": "<<W3_R03_K>>",
-        "<<W3_R04_C>>": "<<W3_R04_C>>", "<<W3_R04_M>>": "<<W3_R04_M>>", "<<W3_R04_Y>>": "<<W3_R04_Y>>", "<<W3_R04_K>>": "<<W3_R04_K>>",
-        "<<W3_R05_C>>": "<<W3_R05_C>>", "<<W3_R05_M>>": "<<W3_R05_M>>", "<<W3_R05_Y>>": "<<W3_R05_Y>>", "<<W3_R05_K>>": "<<W3_R05_K>>",
-        "<<W3_R06_C>>": "<<W3_R06_C>>", "<<W3_R06_M>>": "<<W3_R06_M>>", "<<W3_R06_Y>>": "<<W3_R06_Y>>", "<<W3_R06_K>>": "<<W3_R06_K>>",
-        "<<W3_R07_C>>": "<<W3_R07_C>>", "<<W3_R07_M>>": "<<W3_R07_M>>", "<<W3_R07_Y>>": "<<W3_R07_Y>>", "<<W3_R07_K>>": "<<W3_R07_K>>",
-        "<<W3_R08_C>>": "<<W3_R08_C>>", "<<W3_R08_M>>": "<<W3_R08_M>>", "<<W3_R08_Y>>": "<<W3_R08_Y>>", "<<W3_R08_K>>": "<<W3_R08_K>>",
-        "<<W3_R09_C>>": "<<W3_R09_C>>", "<<W3_R09_M>>": "<<W3_R09_M>>", "<<W3_R09_Y>>": "<<W3_R09_Y>>", "<<W3_R09_K>>": "<<W3_R09_K>>",
-        "<<W3_R10_C>>": "<<W3_R10_C>>", "<<W3_R10_M>>": "<<W3_R10_M>>", "<<W3_R10_Y>>": "<<W3_R10_Y>>", "<<W3_R10_K>>": "<<W3_R10_K>>",
-        "<<W3_R11_C>>": "<<W3_R11_C>>", "<<W3_R11_M>>": "<<W3_R11_M>>", "<<W3_R11_Y>>": "<<W3_R11_Y>>", "<<W3_R11_K>>": "<<W3_R11_K>>",
-        "<<W3_R12_C>>": "<<W3_R12_C>>", "<<W3_R12_M>>": "<<W3_R12_M>>", "<<W3_R12_Y>>": "<<W3_R12_Y>>", "<<W3_R12_K>>": "<<W3_R12_K>>",
-        "<<W3_R13_C>>": "<<W3_R13_C>>", "<<W3_R13_M>>": "<<W3_R13_M>>", "<<W3_R13_Y>>": "<<W3_R13_Y>>", "<<W3_R13_K>>": "<<W3_R13_K>>",
-        "<<W3_R14_C>>": "<<W3_R14_C>>", "<<W3_R14_M>>": "<<W3_R14_M>>", "<<W3_R14_Y>>": "<<W3_R14_Y>>", "<<W3_R14_K>>": "<<W3_R14_K>>",
-        "<<W3_R15_C>>": "<<W3_R15_C>>", "<<W3_R15_M>>": "<<W3_R15_M>>", "<<W3_R15_Y>>": "<<W3_R15_Y>>", "<<W3_R15_K>>": "<<W3_R15_K>>",
-        "<<W3_R16_C>>": "<<W3_R16_C>>", "<<W3_R16_M>>": "<<W3_R16_M>>", "<<W3_R16_Y>>": "<<W3_R16_Y>>", "<<W3_R16_K>>": "<<W3_R16_K>>"
-    };
+    var replacements = <<REPLACEMENTS_DICT>>;
 
     // ---------------------------------------------------------------------------
     // 3. Walk all text frames and replace placeholder text
