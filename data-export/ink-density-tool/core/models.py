@@ -48,6 +48,8 @@ class JobConfig:
     dot_shape_type: str = "CRS"   # CRS, CRY, HD, or ESXR
     dot_shape_number: str = ""    # e.g. "01", "502"
     date: str = ""
+    set_number: str = ""
+    job_number: str = ""
     weight_labels: list[str] = field(default_factory=lambda: ["120#", "150#", "200#"])
     step_labels: list[str] = field(default_factory=lambda: list(STEP_LABELS_14))
     colour_names: list[str] = field(default_factory=lambda: list(COLOUR_NAMES))

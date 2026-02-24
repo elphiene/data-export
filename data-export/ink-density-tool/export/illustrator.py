@@ -76,6 +76,8 @@ def _build_placeholders(job: JobConfig, shape: ShapeData, chunk: list[WeightData
         "<<STOCK>>": "",
         "<<CRS>>": dot_shape,
         "<<DATE>>": job.date,
+        "<<SET>>": job.set_number,
+        "<<JOB>>": job.job_number,
         "<<SHAPE>>": shape.name,
     }
 

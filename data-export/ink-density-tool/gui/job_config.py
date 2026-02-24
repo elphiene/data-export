@@ -96,6 +96,22 @@ class JobConfigPanel(ttk.Frame):
         ttk.Label(self, text="Date:", anchor="w").pack(fill="x", **pad)
         ttk.Entry(self, textvariable=self._date_var).pack(fill="x", **pad)
 
+        # Set Number / Job Number
+        sj_frame = ttk.Frame(self)
+        sj_frame.pack(fill="x", padx=8, pady=3)
+
+        set_col = ttk.Frame(sj_frame)
+        set_col.pack(side="left", fill="x", expand=True, padx=(0, 4))
+        ttk.Label(set_col, text="Set #:", anchor="w").pack(fill="x")
+        self._set_number_var = tk.StringVar()
+        ttk.Entry(set_col, textvariable=self._set_number_var).pack(fill="x")
+
+        job_col = ttk.Frame(sj_frame)
+        job_col.pack(side="left", fill="x", expand=True)
+        ttk.Label(job_col, text="Job #:", anchor="w").pack(fill="x")
+        self._job_number_var = tk.StringVar()
+        ttk.Entry(job_col, textvariable=self._job_number_var).pack(fill="x")
+
         ttk.Separator(self, orient="horizontal").pack(fill="x", padx=8, pady=8)
 
         # Weights
@@ -202,6 +218,8 @@ class JobConfigPanel(ttk.Frame):
             "dot_shape_type": self._dot_shape_type_var.get(),
             "dot_shape_number": self._dot_shape_number_var.get(),
             "date": self._date_var.get(),
+            "set_number": self._set_number_var.get(),
+            "job_number": self._job_number_var.get(),
         }
 
     def populate(self, job: JobConfig) -> None:
@@ -212,5 +230,7 @@ class JobConfigPanel(ttk.Frame):
         self._dot_shape_type_var.set(job.dot_shape_type)
         self._dot_shape_number_var.set(job.dot_shape_number)
         self._date_var.set(job.date)
+        self._set_number_var.set(job.set_number)
+        self._job_number_var.set(job.job_number)
         self._rebuild_weight_chips(job.weight_labels)
         self._steps_var.set("16" if len(job.step_labels) == 16 else "14")

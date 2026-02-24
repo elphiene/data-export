@@ -175,6 +175,8 @@ class App(tk.Tk):
             dot_shape_type=meta["dot_shape_type"],
             dot_shape_number=meta["dot_shape_number"],
             date=meta["date"],
+            set_number=meta["set_number"],
+            job_number=meta["job_number"],
             weight_labels=weight_labels,
             step_labels=step_labels,
             shapes=shapes,

@@ -31,6 +31,8 @@ def job_to_dict(job: JobConfig) -> dict:
         "dot_shape_type": job.dot_shape_type,
         "dot_shape_number": job.dot_shape_number,
         "date": job.date,
+        "set_number": job.set_number,
+        "job_number": job.job_number,
         "weight_labels": job.weight_labels,
         "step_labels": job.step_labels,
         "colour_names": job.colour_names,
@@ -74,6 +76,8 @@ def job_from_dict(d: dict) -> JobConfig:
         dot_shape_type=d.get("dot_shape_type", "CRS"),
         dot_shape_number=d.get("dot_shape_number", ""),
         date=d.get("date", ""),
+        set_number=d.get("set_number", ""),
+        job_number=d.get("job_number", ""),
         weight_labels=d.get("weight_labels", ["120#", "150#", "200#"]),
         step_labels=d.get("step_labels", [
             "100", "95", "90", "80", "70", "60", "50", "40", "30", "20", "10", "5", "3", "1"
