@@ -99,6 +99,8 @@ class App(tk.Tk):
         self._shape_notebook.pack(fill="both", expand=True, padx=4, pady=4)
 
         ttk.Button(toolbar, text="+ Add Shape", command=self._add_shape).pack(side="left")
+        ttk.Button(toolbar, text="Rename", command=self._rename_shape).pack(side="left", padx=(4, 0))
+        ttk.Button(toolbar, text="✕ Remove", command=self._remove_shape).pack(side="left", padx=(4, 0))
 
         # Export buttons
         btn_frame = ttk.Frame(right_frame)
@@ -360,6 +362,12 @@ class App(tk.Tk):
 
     def _add_shape(self) -> None:
         self._shape_notebook.add_new_shape()
+
+    def _rename_shape(self) -> None:
+        self._shape_notebook.rename_shape(self._shape_notebook.get_selected_index())
+
+    def _remove_shape(self) -> None:
+        self._shape_notebook.remove_shape(self._shape_notebook.get_selected_index())
 
     def _on_weights_changed(self, labels: list[str]) -> None:
         self._shape_notebook.update_weight_labels(labels)

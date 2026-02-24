@@ -176,9 +176,10 @@ class ShapeNotebook(ttk.Frame):
         self._notebook.add(tab, text=shape_data.name)
         self._notebook.select(tab)
 
-        # Right-click context menu for renaming / removing
+        # Right-click context menu and double-click rename
         # Use dynamic lookup so the index stays correct after shape removals
         tab.bind("<Button-3>", lambda e, t=tab: self._shape_context_menu(e, self._shape_tabs.index(t)))
+        tab.bind("<Double-Button-1>", lambda e, t=tab: self.rename_shape(self._shape_tabs.index(t)))
 
     def add_new_shape(self) -> None:
         """Prompt for a name then add a blank shape tab."""
@@ -243,6 +244,14 @@ class ShapeNotebook(ttk.Frame):
             shape_data = tab.get_shape_data()
             shape_data.name = name
             tab.update_weight_labels(shape_data, self._weight_labels, step_labels)
+
+    def get_selected_index(self) -> int:
+        """Return the index of the currently visible shape tab."""
+        current = self._notebook.select()
+        for i, tab in enumerate(self._shape_tabs):
+            if str(tab) == current:
+                return i
+        return 0
 
     def get_all_shapes(self) -> list[ShapeData]:
         result = []
