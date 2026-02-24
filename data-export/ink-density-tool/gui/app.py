@@ -44,6 +44,8 @@ class App(tk.Tk):
         file_menu.add_command(label="Save", accelerator="Ctrl+S", command=self._save_session)
         file_menu.add_command(label="Save As…", accelerator="Ctrl+Shift+S", command=self._save_as)
         file_menu.add_separator()
+        file_menu.add_command(label="Fill Example Data", command=self._fill_example_data)
+        file_menu.add_separator()
         file_menu.add_command(label="Exit", command=self._on_close)
 
         self.bind_all("<Control-n>", lambda e: self._new_job())
@@ -302,6 +304,59 @@ class App(tk.Tk):
     # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------
+
+    def _fill_example_data(self) -> None:
+        """Populate all fields with realistic dummy data for testing."""
+        # fmt: off
+        step_labels = self._config_panel.get_step_labels()
+        weight_labels = ["120#", "150#", "200#"]
+
+        # Realistic CMYK step readings that taper from 100 down to near 0
+        _steps_c = [100.0, 93.2, 86.5, 74.1, 62.8, 52.3, 42.0, 32.7, 23.9, 15.4,  7.8, 3.9, 2.3, 1.1]
+        _steps_m = [100.0, 94.1, 87.3, 75.6, 64.2, 53.8, 43.5, 34.1, 25.2, 16.8,  8.5, 4.2, 2.5, 1.3]
+        _steps_y = [100.0, 92.7, 85.9, 73.4, 61.5, 51.0, 40.8, 31.6, 22.7, 14.2,  6.9, 3.4, 2.0, 0.9]
+        _steps_k = [100.0, 93.8, 86.9, 74.8, 63.1, 52.7, 42.3, 33.0, 24.3, 15.9,  8.1, 4.0, 2.4, 1.2]
+
+        def make_steps(c_off: float, m_off: float) -> list[list[float]]:
+            rows = []
+            for i, _ in enumerate(step_labels):
+                if i < len(_steps_c):
+                    rows.append([
+                        round(_steps_c[i] + c_off, 1),
+                        round(_steps_m[i] + m_off, 1),
+                        round(_steps_y[i] - c_off * 0.5, 1),
+                        round(_steps_k[i] + m_off * 0.5, 1),
+                    ])
+                else:
+                    rows.append([0.0, 0.0, 0.0, 0.0])
+            return rows
+
+        shapes = [
+            ShapeData(name="HD 16", weights=[
+                WeightData(label="120#", density=[2.11, 1.80, 1.66, 1.79], steps=make_steps(0.0,  0.0)),
+                WeightData(label="150#", density=[2.08, 1.77, 1.63, 1.75], steps=make_steps(0.3, -0.2)),
+                WeightData(label="200#", density=[2.05, 1.74, 1.60, 1.72], steps=make_steps(0.6, -0.4)),
+            ]),
+        ]
+
+        job = JobConfig(
+            customer="Test Customer",
+            print_type="CRS",
+            stock_desc="XPS",
+            finish="CBW SP",
+            dot_shape_type="CRS",
+            dot_shape_number="01",
+            date="24-02-2026",
+            set_number="01",
+            job_number="J001",
+            weight_labels=weight_labels,
+            step_labels=step_labels,
+            shapes=shapes,
+        )
+        # fmt: on
+        self._populate_from_job(job)
+        self._dirty = True
+        self._status("Example data loaded")
 
     def _add_shape(self) -> None:
         self._shape_notebook.add_new_shape()
