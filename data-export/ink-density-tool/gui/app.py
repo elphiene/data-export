@@ -256,7 +256,11 @@ class App(tk.Tk):
 
     def _do_export_pdf(self, job: JobConfig, out_path: str) -> None:
         try:
-            from export.illustrator import export_pdf
+            import sys
+            if sys.platform == "win32":
+                from export.illustrator import export_pdf
+            else:
+                from export.libreoffice import export_pdf
             export_pdf(job, out_path)
             self.after(0, self._status, f"PDF exported: {out_path}")
         except Exception as exc:
