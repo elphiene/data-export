@@ -116,8 +116,12 @@ def _render_jsx(placeholders: dict[str, str], template_ai_path: str, out_pdf_pat
         jsx_source = jsx_source.replace(key, value)
 
     # Substitute path tokens — ExtendScript File() requires forward slashes on Windows
-    jsx_source = jsx_source.replace("<<TEMPLATE_PATH>>", template_ai_path.replace("\\", "/"))
-    jsx_source = jsx_source.replace("<<OUTPUT_PDF>>", out_pdf_path.replace("\\", "/"))
+    # Escape backslashes first (for any remaining), then double-quotes for JSX string safety
+    def _jsx_escape(p: str) -> str:
+        return p.replace("\\", "/").replace('"', '\\"')
+
+    jsx_source = jsx_source.replace("<<TEMPLATE_PATH>>", _jsx_escape(template_ai_path))
+    jsx_source = jsx_source.replace("<<OUTPUT_PDF>>", _jsx_escape(out_pdf_path))
 
     return jsx_source
 
@@ -159,15 +163,28 @@ def export_pdf(job: JobConfig, output_path: str) -> None:
                 with open(jsx_path, "w", encoding="utf-8") as f:
                     f.write(jsx_source)
 
-                result = subprocess.run(
-                    [illustrator_exe, "/b", jsx_path],
-                    timeout=120,
-                )
-                if result.returncode != 0:
+                try:
+                    result = subprocess.run(
+                        [illustrator_exe, "/b", jsx_path],
+                        timeout=120,
+                        capture_output=True,
+                        text=True,
+                    )
+                except subprocess.TimeoutExpired:
                     raise RuntimeError(
+                        f"Illustrator timed out after 120 seconds "
+                        f"for shape '{shape.name}' chunk {chunk_idx + 1}. "
+                        "The script may be waiting for user input — check Illustrator."
+                    )
+                if result.returncode != 0:
+                    detail = result.stderr.strip() if result.stderr else ""
+                    msg = (
                         f"Illustrator returned exit code {result.returncode} "
                         f"for shape '{shape.name}' chunk {chunk_idx + 1}"
                     )
+                    if detail:
+                        msg += f"\n{detail}"
+                    raise RuntimeError(msg)
 
                 if not Path(out_pdf).is_file():
                     raise RuntimeError(

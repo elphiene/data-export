@@ -177,8 +177,8 @@ class ShapeNotebook(ttk.Frame):
         self._notebook.select(tab)
 
         # Right-click context menu for renaming / removing
-        idx = len(self._shape_tabs) - 1
-        tab.bind("<Button-3>", lambda e, i=idx: self._shape_context_menu(e, i))
+        # Use dynamic lookup so the index stays correct after shape removals
+        tab.bind("<Button-3>", lambda e, t=tab: self._shape_context_menu(e, self._shape_tabs.index(t)))
 
     def add_new_shape(self) -> None:
         """Prompt for a name then add a blank shape tab."""

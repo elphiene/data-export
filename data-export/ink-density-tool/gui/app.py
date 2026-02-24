@@ -19,6 +19,7 @@ class App(tk.Tk):
         self.minsize(900, 600)
         self._current_path: str | None = None
         self._dirty = False
+        self._export_threads: list[threading.Thread] = []
 
         self._build_menu()
         self._build_layout()
@@ -150,8 +151,6 @@ class App(tk.Tk):
                 ],
             )
         ]
-        job.template_ai_path = app_settings.get("default_ai_path", "")
-        job.template_xlsx_path = app_settings.get("default_xlsx_path", "")
         self._populate_from_job(job)
         self._current_path = None
         self._dirty = False
@@ -168,7 +167,6 @@ class App(tk.Tk):
         step_labels = self._config_panel.get_step_labels()
         shapes = self._shape_notebook.get_all_shapes()
 
-        s = app_settings.load()
         return JobConfig(
             customer=meta["customer"],
             print_type=meta["print_type"],
@@ -180,8 +178,6 @@ class App(tk.Tk):
             weight_labels=weight_labels,
             step_labels=step_labels,
             shapes=shapes,
-            template_ai_path=s.get("default_ai_path", ""),
-            template_xlsx_path=s.get("default_xlsx_path", ""),
         )
 
     def _save_session(self) -> None:
@@ -328,12 +324,23 @@ class App(tk.Tk):
         )
 
     def _on_close(self) -> None:
+        # Warn if an export is still running
+        self._export_threads = [t for t in self._export_threads if t.is_alive()]
+        if self._export_threads:
+            if not messagebox.askyesno(
+                "Export In Progress",
+                "An export is still running. Closing now may produce incomplete files.\n\n"
+                "Close anyway?",
+            ):
+                return
         if self._dirty and not self._confirm_discard():
             return
         self.destroy()
 
     def _run_in_thread(self, fn, *args) -> None:
-        threading.Thread(target=fn, args=args, daemon=True).start()
+        t = threading.Thread(target=fn, args=args, daemon=True)
+        self._export_threads.append(t)
+        t.start()
 
 
 # ------------------------------------------------------------------

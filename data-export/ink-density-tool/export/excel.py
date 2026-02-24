@@ -11,18 +11,18 @@ Template structure (DGC-curve-calculator.xlsx) — confirmed from file inspectio
     I1      : date
     B4:E17  : CMYK step readings for weight[0], steps 100→1  (14 rows × 4 cols)
               or B4:E19 for 16-step jobs (adds 0.8%, 0.4%)
-    A20     : weight[0].label  (row = 4 + num_steps + 2)
-    I20     : job.crs
+    A18     : weight[0].label  (row = 4 + num_steps)  [A20 for 16-step]
+    I18     : dot shape                                [I20 for 16-step]
 
   Dual-weight sheet layout (Sheet2 / Sheet4):
     A1      : job title
     I1      : date
     B4:E17  : CMYK step readings for weight[1]
-    A20     : weight[1].label
-    I20     : job.crs
-    B27:E40 : CMYK step readings for weight[2]
-    A43     : weight[2].label
-    I43     : job.crs
+    A18     : weight[1].label                          [A20 for 16-step]
+    I18     : dot shape                                [I20 for 16-step]
+    B25:E38 : CMYK step readings for weight[2]         [B27:E42 for 16-step]
+    A38     : weight[2].label                          [A42 for 16-step]
+    I38     : dot shape                                [I42 for 16-step]
 
   Note: rows 18–19 (0.8%, 0.4% steps) and rows 41–42 are filled for 16-step jobs.
 
@@ -79,11 +79,7 @@ def export_excel(job: JobConfig, output_path: str) -> None:
     """Fill the Excel template from job data and save to output_path."""
     num_steps = len(job.step_labels)
 
-    # Use explicit override path if set, otherwise auto-select bundled template
-    if job.template_xlsx_path:
-        template_path = Path(job.template_xlsx_path)
-    else:
-        template_path = _bundled_template(num_steps)
+    template_path = _bundled_template(num_steps)
 
     if not template_path.is_file():
         raise FileNotFoundError(f"Excel template not found: {template_path}")
@@ -165,6 +161,8 @@ def _write_cell(ws, row: int, col: int, value) -> None:
             if rng.min_row <= row <= rng.max_row and rng.min_col <= col <= rng.max_col:
                 ws.cell(row=rng.min_row, column=rng.min_col, value=value)
                 return
+        # Merge range not found — write directly as fallback (unmerge may have occurred)
+        ws.cell(row=row, column=col).value = value
     else:
         cell.value = value
 

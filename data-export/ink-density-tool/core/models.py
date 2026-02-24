@@ -52,5 +52,3 @@ class JobConfig:
     step_labels: list[str] = field(default_factory=lambda: list(STEP_LABELS_14))
     colour_names: list[str] = field(default_factory=lambda: list(COLOUR_NAMES))
     shapes: list[ShapeData] = field(default_factory=list)
-    template_ai_path: str = ""
-    template_xlsx_path: str = ""

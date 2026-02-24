@@ -49,7 +49,9 @@ def load() -> dict:
         try:
             with open(path, "r", encoding="utf-8") as f:
                 stored = json.load(f)
-        except Exception:
+        except (json.JSONDecodeError, OSError) as exc:
+            import logging
+            logging.getLogger(__name__).warning("Failed to load settings, using defaults: %s", exc)
             stored = {}
     else:
         stored = {}
@@ -63,9 +65,13 @@ def load() -> dict:
 
 def _save(data: dict) -> None:
     path = _settings_path()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2)
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2)
+    except OSError as exc:
+        import logging
+        logging.getLogger(__name__).error("Failed to save settings: %s", exc)
 
 
 def get(key: str, default=None):

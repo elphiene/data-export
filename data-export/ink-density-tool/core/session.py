@@ -35,16 +35,22 @@ def job_to_dict(job: JobConfig) -> dict:
         "step_labels": job.step_labels,
         "colour_names": job.colour_names,
         "shapes": [_shape_to_dict(s) for s in job.shapes],
-        "template_ai_path": job.template_ai_path,
-        "template_xlsx_path": job.template_xlsx_path,
     }
 
 
+def _pad_or_trim(lst: list[float], length: int) -> list[float]:
+    """Ensure list has exactly `length` elements, padding with 0.0 or trimming."""
+    if len(lst) < length:
+        return lst + [0.0] * (length - len(lst))
+    return lst[:length]
+
+
 def _weight_from_dict(d: dict) -> WeightData:
-    density = [float(v) for v in d.get("density", [0.0, 0.0, 0.0, 0.0])]
+    raw_density = [float(v) for v in d.get("density", [0.0, 0.0, 0.0, 0.0])]
+    density = _pad_or_trim(raw_density, 4)
     raw_steps = d.get("steps", [])
     steps = [
-        [float(v) for v in row] if row else [0.0, 0.0, 0.0, 0.0]
+        _pad_or_trim([float(v) for v in row], 4) if row else [0.0, 0.0, 0.0, 0.0]
         for row in raw_steps
     ]
     if not steps:
@@ -74,8 +80,6 @@ def job_from_dict(d: dict) -> JobConfig:
         ]),
         colour_names=d.get("colour_names", ["C", "M", "Y", "K"]),
         shapes=[_shape_from_dict(s) for s in d.get("shapes", [])],
-        template_ai_path=d.get("template_ai_path", ""),
-        template_xlsx_path=d.get("template_xlsx_path", ""),
     )
 
 
