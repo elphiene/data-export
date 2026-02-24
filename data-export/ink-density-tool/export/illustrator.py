@@ -115,9 +115,9 @@ def _render_jsx(placeholders: dict[str, str], template_ai_path: str, out_pdf_pat
     for key, value in placeholders.items():
         jsx_source = jsx_source.replace(key, value)
 
-    # Substitute path tokens
-    jsx_source = jsx_source.replace("<<TEMPLATE_PATH>>", template_ai_path.replace("\\", "\\\\"))
-    jsx_source = jsx_source.replace("<<OUTPUT_PDF>>", out_pdf_path.replace("\\", "\\\\"))
+    # Substitute path tokens — ExtendScript File() requires forward slashes on Windows
+    jsx_source = jsx_source.replace("<<TEMPLATE_PATH>>", template_ai_path.replace("\\", "/"))
+    jsx_source = jsx_source.replace("<<OUTPUT_PDF>>", out_pdf_path.replace("\\", "/"))
 
     return jsx_source
 
