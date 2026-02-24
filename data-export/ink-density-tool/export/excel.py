@@ -39,6 +39,7 @@ import sys
 from pathlib import Path
 
 import openpyxl
+from openpyxl.cell import MergedCell
 from openpyxl.worksheet.page import PageMargins
 from openpyxl.worksheet.properties import WorksheetProperties, PageSetupProperties
 
@@ -112,23 +113,23 @@ def export_excel(job: JobConfig, output_path: str) -> None:
         if len(shape.weights) > 0:
             w0 = shape.weights[0]
             _write_steps(ws_single, w0.steps, _STEP_START_ROW_T1, num_steps)
-            ws_single[f"A{label_t1}"] = w0.label
-            ws_single[f"I{label_t1}"] = dot_shape
+            _write_cell(ws_single, label_t1, 1, w0.label)
+            _write_cell(ws_single, label_t1, 9, dot_shape)
 
         # --- Dual sheet: weight[1] (first table) ---
         _write_metadata(ws_dual, title, job.date)
         if len(shape.weights) > 1:
             w1 = shape.weights[1]
             _write_steps(ws_dual, w1.steps, _STEP_START_ROW_T1, num_steps)
-            ws_dual[f"A{label_t1}"] = w1.label
-            ws_dual[f"I{label_t1}"] = dot_shape
+            _write_cell(ws_dual, label_t1, 1, w1.label)
+            _write_cell(ws_dual, label_t1, 9, dot_shape)
 
         # --- Dual sheet: weight[2] (second table) ---
         if len(shape.weights) > 2:
             w2 = shape.weights[2]
             _write_steps(ws_dual, w2.steps, step_start_t2, num_steps)
-            ws_dual[f"A{label_t2}"] = w2.label
-            ws_dual[f"I{label_t2}"] = dot_shape
+            _write_cell(ws_dual, label_t2, 1, w2.label)
+            _write_cell(ws_dual, label_t2, 9, dot_shape)
             _fix_second_table_formulas(ws_dual, step_start_t2, num_steps)
 
     # Apply A4 page setup to all worksheets
@@ -156,9 +157,21 @@ def export_excel(job: JobConfig, output_path: str) -> None:
 # Helpers
 # ---------------------------------------------------------------------------
 
+def _write_cell(ws, row: int, col: int, value) -> None:
+    """Write value to a cell, resolving to the top-left cell if it is part of a merge."""
+    cell = ws.cell(row=row, column=col)
+    if isinstance(cell, MergedCell):
+        for rng in ws.merged_cells.ranges:
+            if rng.min_row <= row <= rng.max_row and rng.min_col <= col <= rng.max_col:
+                ws.cell(row=rng.min_row, column=rng.min_col, value=value)
+                return
+    else:
+        cell.value = value
+
+
 def _write_metadata(ws, title: str, date: str) -> None:
-    ws["A1"] = title
-    ws["I1"] = date
+    _write_cell(ws, 1, 1, title)   # A1
+    _write_cell(ws, 1, 9, date)    # I1
 
 
 def _write_steps(ws, steps: list[list[float]], start_row: int, num_steps: int) -> None:
@@ -171,7 +184,7 @@ def _write_steps(ws, steps: list[list[float]], start_row: int, num_steps: int) -
         for ci, col in enumerate(_DATA_COLS):
             value = row_data[ci] if ci < len(row_data) else None
             # Write blank rather than 0 for unset values so formulas read as empty
-            ws.cell(row=excel_row, column=col, value=value if value else None)
+            _write_cell(ws, excel_row, col, value if value else None)
 
 
 def _fix_second_table_formulas(ws, start_row: int, num_steps: int) -> None:
