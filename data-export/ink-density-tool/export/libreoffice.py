@@ -220,6 +220,12 @@ def export_pdf(job: JobConfig, output_path: str) -> None:
             "Please set all three template paths in Settings."
         )
 
+    if not job.shapes:
+        raise RuntimeError("No shapes to export.")
+    for shape in job.shapes:
+        if not shape.weights:
+            raise RuntimeError(f"Shape '{shape.name}' has no LPIs. Add at least one before exporting.")
+
     session = _LoSession(lo_exe)
     try:
         all_pdfs: list[str] = []

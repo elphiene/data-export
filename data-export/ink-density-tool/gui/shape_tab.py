@@ -90,10 +90,20 @@ class _ShapeTab(ttk.Frame):
 
             # Mouse wheel scrolling
             def _on_mousewheel(event, c=canvas):
-                c.yview_scroll(int(-1 * (event.delta / 120)), "units")
+                if event.num == 4:          # Linux scroll up
+                    c.yview_scroll(-3, "units")
+                elif event.num == 5:        # Linux scroll down
+                    c.yview_scroll(3, "units")
+                else:                       # Windows/macOS
+                    c.yview_scroll(int(-1 * (event.delta / 120)), "units")
 
             canvas.bind("<MouseWheel>", _on_mousewheel)
             inner.bind("<MouseWheel>", _on_mousewheel)
+            # Linux X11 uses Button-4/5 for scroll wheel
+            canvas.bind("<Button-4>", _on_mousewheel)
+            canvas.bind("<Button-5>", _on_mousewheel)
+            inner.bind("<Button-4>", _on_mousewheel)
+            inner.bind("<Button-5>", _on_mousewheel)
 
             self._notebook.add(container, text=label)
 

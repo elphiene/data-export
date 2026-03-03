@@ -115,7 +115,7 @@ class JobConfigPanel(ttk.Frame):
         ttk.Separator(self, orient="horizontal").pack(fill="x", padx=8, pady=8)
 
         # Weights
-        ttk.Label(self, text="Weights:", anchor="w").pack(fill="x", padx=8)
+        ttk.Label(self, text="LPIs:", anchor="w").pack(fill="x", padx=8)
         self._weight_frame = ttk.Frame(self)
         self._weight_frame.pack(fill="x", padx=8, pady=4)
         self._rebuild_weight_chips([])
@@ -152,7 +152,7 @@ class JobConfigPanel(ttk.Frame):
 
         ttk.Button(
             self._weight_frame,
-            text="+ Add weight",
+            text="+ Add LPI",
             command=self._add_weight,
             width=14,
         ).pack(anchor="w", pady=(4, 0))
@@ -179,7 +179,7 @@ class JobConfigPanel(ttk.Frame):
 
     def _add_weight(self) -> None:
         current = self.get_weight_labels()
-        current.append(f"W{len(current) + 1}#")
+        current.append(f"LPI{len(current) + 1}")
         self._rebuild_weight_chips(current)
         self._notify_weights_changed()
 
@@ -204,7 +204,7 @@ class JobConfigPanel(ttk.Frame):
     # ------------------------------------------------------------------
 
     def get_weight_labels(self) -> list[str]:
-        return [v.get().strip() or f"W{i+1}#" for i, v in enumerate(self._weight_vars)]
+        return [v.get().strip() or f"LPI{i+1}" for i, v in enumerate(self._weight_vars)]
 
     def get_step_labels(self) -> list[str]:
         return list(STEP_LABELS_16) if self._steps_var.get() == "16" else list(STEP_LABELS_14)
