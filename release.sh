@@ -22,10 +22,15 @@ git push origin rust-version
 cd "$SCRIPT_DIR/data-export/ink-density-tool-rs"
 cargo build --release --target x86_64-pc-windows-gnu
 
-# ── 4. Base64-encode exe as a .txt so Gmail can't detect it ──────────
+# ── 4. Strip + gzip + base64 encode as .txt ──────────────────────────
+EXE="target/x86_64-pc-windows-gnu/release/ink-density-tool.exe"
+GZ="target/ink-density-tool.exe.gz"
 TXT="target/InkDensityTool.txt"
-base64 target/x86_64-pc-windows-gnu/release/ink-density-tool.exe > "$TXT"
-echo "Encoded: $TXT"
+x86_64-w64-mingw32-strip "$EXE" 2>/dev/null || true
+gzip -9 -c "$EXE" > "$GZ"
+base64 "$GZ" > "$TXT"
+SIZE=$(du -sh "$TXT" | cut -f1)
+echo "Encoded: $TXT ($SIZE)"
 
 # ── 5. Email with .txt attachment ─────────────────────────────────────
 python3 - "$SMTP_USER" "$SMTP_PASS" "$SMTP_TO" "$TXT" <<'PYEOF'
@@ -37,21 +42,21 @@ from email import encoders
 
 user, pw, to, txt_path = sys.argv[1:]
 
-decode_cmd = (
-    "[System.Convert]::FromBase64String("
-    "(Get-Content -Raw InkDensityTool.txt)) | "
-    "Set-Content -Encoding Byte ink-density-tool.exe"
-)
+decode_cmd = r"""$b=[Convert]::FromBase64String((Get-Content -Raw InkDensityTool.txt))
+$ms=New-Object IO.MemoryStream(,$b)
+$gz=New-Object IO.Compression.GzipStream($ms,[IO.Compression.CompressionMode]::Decompress)
+$out=New-Object IO.MemoryStream; $gz.CopyTo($out)
+[IO.File]::WriteAllBytes("$PWD\ink-density-tool.exe",$out.ToArray())"""
 
 msg = MIMEMultipart()
 msg['From'] = user
 msg['To'] = to
 msg['Subject'] = "InkDensityTool build ready"
 msg.attach(MIMEText(
-    f"Latest build attached as InkDensityTool.txt (base64-encoded to pass Gmail).\n\n"
-    f"To decode on Windows — open PowerShell in the same folder and run:\n\n"
-    f"  {decode_cmd}\n\n"
-    f"Then run ink-density-tool.exe.",
+    "Latest build attached as InkDensityTool.txt.\n\n"
+    "To decode: save the attachment, open PowerShell in the same folder, paste and run:\n\n"
+    f"{decode_cmd}\n\n"
+    "Then run ink-density-tool.exe.",
     'plain'
 ))
 
