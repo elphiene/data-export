@@ -244,16 +244,6 @@ pub fn show_weight_grid(
                     } else {
                         let old_val = state.cells[row][col].clone();
 
-                        // Pre-consume Tab/Enter before the TextEdit renders so egui's built-in
-                        // Tab navigation cannot also fire.  We check memory focus (last frame's
-                        // focus) rather than the not-yet-rendered response.
-                        let cell_has_focus = ui.memory(|m| m.has_focus(id));
-                        let nav_pressed = cell_has_focus
-                            && ui.input_mut(|i| {
-                                i.consume_key(egui::Modifiers::NONE, egui::Key::Tab)
-                                    || i.consume_key(egui::Modifiers::NONE, egui::Key::Enter)
-                            });
-
                         let response = ui.add_sized(
                             [60.0, 20.0],
                             egui::TextEdit::singleline(&mut state.cells[row][col])
@@ -305,11 +295,17 @@ pub fn show_weight_grid(
                         }
 
                         // Tab / Enter — column-major advance.
-                        // nav_pressed was consumed before rendering so egui's built-in
-                        // Tab focus movement never fires; has_focus() stays true.
-                        if nav_pressed && response.has_focus() {
+                        // lost_focus() fires when egui's built-in Tab moves focus away;
+                        // we then override with our column-major focus_request next frame.
+                        // advance_ignore_next_tab swallows the Tab that trails a settle-timer
+                        // advance so it doesn't cause a second jump.
+                        if response.lost_focus()
+                            && ui.input(|i| {
+                                i.key_pressed(egui::Key::Tab)
+                                    || i.key_pressed(egui::Key::Enter)
+                            })
+                        {
                             if state.advance_ignore_next_tab {
-                                // Settle timer already advanced; eat this Tab.
                                 state.advance_ignore_next_tab = false;
                             } else if Some(cell_id) == last_cell {
                                 state.completed = true;
