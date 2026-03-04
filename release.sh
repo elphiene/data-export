@@ -36,7 +36,7 @@ gh release create "$TAG" \
   --title "InkDensityTool $TAG" \
   --notes "Automated build from rust-version branch." \
   --prerelease
-DOWNLOAD_URL=$(gh release view "$TAG" --json assets --jq '.assets[0].browserDownloadUrl')
+DOWNLOAD_URL="https://github.com/elphiene/data-export/releases/download/$TAG/InkDensityTool.zip"
 echo "Release URL: $DOWNLOAD_URL"
 
 python3 - "$SMTP_USER" "$SMTP_PASS" "$SMTP_TO" "$DOWNLOAD_URL" <<'PYEOF'
