@@ -145,6 +145,21 @@ impl WeightGridState {
     pub fn focus_first(&mut self) {
         self.focus_request = Some(CellId { row: 0, col: 0 });
     }
+
+    /// Clear all entry fields: zero density row and step rows (re-lock 100% row).
+    pub fn clear(&mut self) {
+        for row in &mut self.cells {
+            *row = [String::new(), String::new(), String::new(), String::new()];
+        }
+        // Re-lock 100% row (index 1)
+        if self.cells.len() > 1 {
+            self.cells[1] = ["100".into(), "100".into(), "100".into(), "100".into()];
+        }
+        self.settle_cell = None;
+        self.settle_time = None;
+        self.focus_request = None;
+        self.completed = false;
+    }
 }
 
 fn fmt(v: f64) -> String {
@@ -196,9 +211,7 @@ pub fn show_weight_grid(
             // Header row
             ui.label(""); // row label column
             for name in COLOUR_NAMES {
-                ui.centered_and_justified(|ui| {
-                    ui.strong(*name);
-                });
+                ui.add_sized([60.0, 20.0], egui::Label::new(egui::RichText::new(*name).strong()));
             }
             ui.end_row();
 
@@ -220,10 +233,8 @@ pub fn show_weight_grid(
                     let id = egui::Id::new(format!("{id_salt}_cell_{row}_{col}"));
 
                     if is_locked {
-                        // Show locked 100% value
-                        ui.centered_and_justified(|ui| {
-                            ui.label("100");
-                        });
+                        // Show locked 100% value — same size as editable cells for uniform column width
+                        ui.add_sized([60.0, 20.0], egui::Label::new("100"));
                     } else {
                         let old_val = state.cells[row][col].clone();
 

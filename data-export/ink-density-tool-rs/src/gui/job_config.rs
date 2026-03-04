@@ -90,6 +90,19 @@ impl JobConfigState {
         DOT_SHAPE_TYPES.get(self.dot_shape_type_idx).unwrap_or(&"CRS")
     }
 
+    /// Clear all job metadata fields (not weight labels or step preset).
+    pub fn clear(&mut self) {
+        self.customer.clear();
+        self.stock_desc.clear();
+        self.dot_shape_number.clear();
+        self.date.clear();
+        self.set_number.clear();
+        self.job_number.clear();
+        self.print_type_idx = 0;
+        self.finish_idx = 0;
+        self.dot_shape_type_idx = 0;
+    }
+
     pub fn step_labels(&self) -> Vec<String> {
         match self.step_preset {
             StepPreset::Standard14 => STEP_LABELS_14.iter().map(|s| s.to_string()).collect(),
@@ -245,12 +258,12 @@ pub fn show_job_config(ui: &mut egui::Ui, state: &mut JobConfigState) -> bool {
     ui.radio_value(
         &mut state.step_preset,
         StepPreset::Standard14,
-        "Standard (100\u{2192}1)",
+        "Standard (100 -> 1)",
     );
     ui.radio_value(
         &mut state.step_preset,
         StepPreset::Extended16,
-        "Extended (100\u{2192}0.4)",
+        "Extended (100 -> 0.4)",
     );
     if state.step_preset != old_preset {
         changed = true;

@@ -33,6 +33,15 @@ pub struct InkDensityApp {
     show_rename_dialog: bool,
     rename_shape_name: String,
     rename_shape_idx: usize,
+
+    // Templates dialog
+    show_templates_dialog: bool,
+    tmpl_1lpi: String,
+    tmpl_2lpi: String,
+    tmpl_3lpi: String,
+    tmpl_1lpi_ext: String,
+    tmpl_2lpi_ext: String,
+    tmpl_3lpi_ext: String,
 }
 
 impl InkDensityApp {
@@ -49,6 +58,13 @@ impl InkDensityApp {
             show_rename_dialog: false,
             rename_shape_name: String::new(),
             rename_shape_idx: 0,
+            show_templates_dialog: false,
+            tmpl_1lpi: settings::get_str("ai_template_1lpi"),
+            tmpl_2lpi: settings::get_str("ai_template_2lpi"),
+            tmpl_3lpi: settings::get_str("ai_template_3lpi"),
+            tmpl_1lpi_ext: settings::get_str("ai_template_1lpi_extended"),
+            tmpl_2lpi_ext: settings::get_str("ai_template_2lpi_extended"),
+            tmpl_3lpi_ext: settings::get_str("ai_template_3lpi_extended"),
         };
         app.load_initial_session();
         app
@@ -366,6 +382,25 @@ impl eframe::App for InkDensityApp {
                     }
                 });
 
+                ui.menu_button("Clear", |ui| {
+                    if ui.button("Clear Current Page").clicked() {
+                        self.shape_state.clear_current_weight();
+                        self.dirty = true;
+                        ui.close_menu();
+                    }
+                    if ui.button("Clear All Pages").clicked() {
+                        self.shape_state.clear_all_weights();
+                        self.dirty = true;
+                        ui.close_menu();
+                    }
+                    if ui.button("Clear All").clicked() {
+                        self.shape_state.clear_all_weights();
+                        self.config_state.clear();
+                        self.dirty = true;
+                        ui.close_menu();
+                    }
+                });
+
                 ui.menu_button("Settings", |ui| {
                     if ui.button("Illustrator Path...").clicked() {
                         if let Some(path) = rfd::FileDialog::new()
@@ -376,6 +411,10 @@ impl eframe::App for InkDensityApp {
                             settings::set_str("illustrator_path", &path.to_string_lossy());
                             self.status = format!("Illustrator path set: {}", path.display());
                         }
+                        ui.close_menu();
+                    }
+                    if ui.button("Templates...").clicked() {
+                        self.show_templates_dialog = true;
                         ui.close_menu();
                     }
                 });
@@ -502,6 +541,55 @@ impl eframe::App for InkDensityApp {
                         }
                     });
                 });
+        }
+
+        // Templates dialog
+        if self.show_templates_dialog {
+            let mut open = true;
+            egui::Window::new("Illustrator Templates")
+                .collapsible(false)
+                .resizable(false)
+                .open(&mut open)
+                .show(ctx, |ui| {
+                    egui::Grid::new("tmpl_grid").num_columns(3).spacing([8.0, 4.0]).show(ui, |ui| {
+                        let entries: &mut [(&str, &str, &mut String)] = &mut [
+                            ("1 LPI (standard)",  "ai_template_1lpi",           &mut self.tmpl_1lpi),
+                            ("2 LPI (standard)",  "ai_template_2lpi",           &mut self.tmpl_2lpi),
+                            ("3 LPI (standard)",  "ai_template_3lpi",           &mut self.tmpl_3lpi),
+                            ("1 LPI (extended)",  "ai_template_1lpi_extended",  &mut self.tmpl_1lpi_ext),
+                            ("2 LPI (extended)",  "ai_template_2lpi_extended",  &mut self.tmpl_2lpi_ext),
+                            ("3 LPI (extended)",  "ai_template_3lpi_extended",  &mut self.tmpl_3lpi_ext),
+                        ];
+                        for (label, key, path) in entries.iter_mut() {
+                            ui.label(*label);
+                            ui.add_sized([300.0, 20.0], egui::TextEdit::singleline(*path));
+                            if ui.button("Browse...").clicked() {
+                                if let Some(p) = rfd::FileDialog::new()
+                                    .add_filter("Illustrator Template", &["ai"])
+                                    .add_filter("All Files", &["*"])
+                                    .pick_file()
+                                {
+                                    **path = p.to_string_lossy().to_string();
+                                    settings::set_str(key, path);
+                                }
+                            }
+                            ui.end_row();
+                        }
+                    });
+                    ui.add_space(4.0);
+                    if ui.button("Save & Close").clicked() {
+                        settings::set_str("ai_template_1lpi",          &self.tmpl_1lpi);
+                        settings::set_str("ai_template_2lpi",          &self.tmpl_2lpi);
+                        settings::set_str("ai_template_3lpi",          &self.tmpl_3lpi);
+                        settings::set_str("ai_template_1lpi_extended", &self.tmpl_1lpi_ext);
+                        settings::set_str("ai_template_2lpi_extended", &self.tmpl_2lpi_ext);
+                        settings::set_str("ai_template_3lpi_extended", &self.tmpl_3lpi_ext);
+                        self.show_templates_dialog = false;
+                    }
+                });
+            if !open {
+                self.show_templates_dialog = false;
+            }
         }
     }
 }

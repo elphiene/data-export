@@ -1,22 +1,36 @@
-//! Excel export using rust_xlsxwriter.
+//! Excel export — fills the bundled .xlsx templates using umya-spreadsheet.
 //!
-//! Since rust_xlsxwriter creates new workbooks (can't modify templates like openpyxl),
-//! we recreate the template structure programmatically. The layout matches the Python
-//! export exactly.
+//! Template layout (matches Python export/excel.py exactly):
+//!
+//!   Two sheets per shape:
+//!     Single sheet (even index): weight[0] only
+//!     Dual sheet   (odd index):  weight[1] (first table) + weight[2] (second table)
+//!
+//!   Cell mapping (1-indexed rows & cols):
+//!     A1 / I1           title / date
+//!     B4:E17 (std)      CMYK step data, first table  (B4:E19 for 16-step)
+//!     A18 / I18 (std)   weight label / dot shape     (A20 / I20 for 16-step)
+//!     B25:E38 (std)     CMYK step data, second table (B27:E42 for 16-step)
+//!     A38 / I38 (std)   weight label / dot shape     (A42 / I42 for 16-step)
+//!     F column (dual)   =SUM(Bn:En)/4 average formula — fixed for second table
 
+use std::io::Write as IoWrite;
 use std::path::Path;
 
 use anyhow::{Context, Result};
-use rust_xlsxwriter::{Format, Workbook, Worksheet};
 
 use crate::core::models::JobConfig;
 
-/// Row where step data starts (first table, both sheet types)
-const STEP_START_ROW_T1: u32 = 3; // 0-indexed (row 4 in Excel)
-/// Gap (in rows) between the T1 label row and the T2 step-start row
+/// Embedded template bytes — standard (14 steps) and extended (16 steps).
+static TEMPLATE_STANDARD: &[u8] = include_bytes!("../../assets/template_standard.xlsx");
+static TEMPLATE_EXTENDED: &[u8] = include_bytes!("../../assets/template_extended.xlsx");
+
+/// Row where step data starts (1-indexed, first table).
+const STEP_START_ROW_T1: u32 = 4;
+/// Row gap between end of table-1 label and start of table-2 step data.
 const GAP_T1_TO_T2: u32 = 7;
-/// CMYK data columns: B=1, C=2, D=3, E=4 (0-indexed)
-const DATA_COLS: [u16; 4] = [1, 2, 3, 4];
+/// CMYK data columns B=2, C=3, D=4, E=5 (1-indexed).
+const DATA_COLS: [u32; 4] = [2, 3, 4, 5];
 
 fn row_constants(num_steps: u32) -> (u32, u32, u32) {
     let label_t1 = STEP_START_ROW_T1 + num_steps;
@@ -25,118 +39,125 @@ fn row_constants(num_steps: u32) -> (u32, u32, u32) {
     (label_t1, step_start_t2, label_t2)
 }
 
+/// Convert a 1-indexed column number to its Excel letter(s).
+fn col_letter(col: u32) -> String {
+    let mut result = String::new();
+    let mut c = col;
+    while c > 0 {
+        c -= 1;
+        result.insert(0, char::from(b'A' + (c % 26) as u8));
+        c /= 26;
+    }
+    result
+}
+
+/// Build an A1-notation cell address from 1-indexed column and row.
+fn addr(col: u32, row: u32) -> String {
+    format!("{}{}", col_letter(col), row)
+}
+
+/// Format a float for cell entry: blank for 0, otherwise strip trailing zeros.
+fn fmt_num(v: f64) -> String {
+    if v == 0.0 {
+        return String::new();
+    }
+    let s = format!("{:.6}", v);
+    s.trim_end_matches('0').trim_end_matches('.').to_string()
+}
+
 pub fn export_excel(job: &JobConfig, output_path: &Path) -> Result<()> {
     let num_steps = job.num_steps() as u32;
     let (label_t1, step_start_t2, label_t2) = row_constants(num_steps);
 
+    let template_bytes = if num_steps > 14 {
+        TEMPLATE_EXTENDED
+    } else {
+        TEMPLATE_STANDARD
+    };
+
+    // Write template bytes to a named temp file so umya-spreadsheet can open it.
+    let mut tmp = tempfile::NamedTempFile::new().context("Failed to create temp file")?;
+    tmp.write_all(template_bytes)
+        .context("Failed to write template to temp file")?;
+    tmp.flush().context("Failed to flush temp file")?;
+    let tmp_path = tmp.path().to_path_buf();
+
+    let mut book = umya_spreadsheet::reader::xlsx::read(&tmp_path)
+        .map_err(|e| anyhow::anyhow!("Failed to read Excel template: {:?}", e))?;
+
     let title = job.heading();
     let dot_shape = job.dot_shape();
 
-    let mut workbook = Workbook::new();
-
-    let header_fmt = Format::new().set_bold();
-    let step_labels = &job.step_labels;
+    let sheet_count = book.get_sheet_collection().len();
 
     for (shape_idx, shape) in job.shapes.iter().enumerate() {
-        // --- Single-weight sheet: weight[0] ---
-        let ws_name = if shape_idx == 0 {
-            "Sheet1".to_string()
-        } else {
-            format!("Sheet{}", shape_idx * 2 + 1)
-        };
+        let single_idx = shape_idx * 2;
+        let dual_idx = shape_idx * 2 + 1;
 
-        let ws = workbook.add_worksheet();
-        ws.set_name(&ws_name)?;
+        // Ensure template has enough sheets; clone first pair if needed.
+        while book.get_sheet_collection().len() <= dual_idx {
+            clone_first_pair(&mut book)?;
+        }
+        let _ = sheet_count; // used above
 
-        // Metadata
-        ws.write_string_with_format(0, 0, &title, &header_fmt)?;
-        ws.write_string(0, 8, &job.date)?;
+        // --- Single sheet: weight[0] ---
+        {
+            let ws = book
+                .get_sheet_mut(&single_idx)
+                .ok_or_else(|| anyhow::anyhow!("Sheet {} not found", single_idx))?;
 
-        // Step labels in column A
-        for (i, label) in step_labels.iter().enumerate() {
-            ws.write_string(STEP_START_ROW_T1 + i as u32, 0, label)?;
+            ws.get_cell_mut(addr(1, 1)).set_value(&title);
+            ws.get_cell_mut(addr(9, 1)).set_value(&job.date);
+
+            if let Some(w0) = shape.weights.get(0) {
+                write_steps(ws, &w0.steps, STEP_START_ROW_T1, num_steps);
+                ws.get_cell_mut(addr(1, label_t1)).set_value(&w0.label);
+                ws.get_cell_mut(addr(9, label_t1)).set_value(&dot_shape);
+            }
         }
 
-        if !shape.weights.is_empty() {
-            let w0 = &shape.weights[0];
-            write_steps(ws, &w0.steps, STEP_START_ROW_T1, num_steps)?;
-            ws.write_string(label_t1, 0, &w0.label)?;
-            ws.write_string(label_t1, 8, &dot_shape)?;
-        }
+        // --- Dual sheet: weight[1] (table 1) + weight[2] (table 2) ---
+        {
+            let ws = book
+                .get_sheet_mut(&dual_idx)
+                .ok_or_else(|| anyhow::anyhow!("Sheet {} not found", dual_idx))?;
 
-        // --- Dual-weight sheet: weight[1] + weight[2] ---
-        let ws_name2 = if shape_idx == 0 {
-            "Sheet2".to_string()
-        } else {
-            format!("Sheet{}", shape_idx * 2 + 2)
-        };
+            ws.get_cell_mut(addr(1, 1)).set_value(&title);
+            ws.get_cell_mut(addr(9, 1)).set_value(&job.date);
 
-        let ws2 = workbook.add_worksheet();
-        ws2.set_name(&ws_name2)?;
+            if let Some(w1) = shape.weights.get(1) {
+                write_steps(ws, &w1.steps, STEP_START_ROW_T1, num_steps);
+                ws.get_cell_mut(addr(1, label_t1)).set_value(&w1.label);
+                ws.get_cell_mut(addr(9, label_t1)).set_value(&dot_shape);
+            }
 
-        ws2.write_string_with_format(0, 0, &title, &header_fmt)?;
-        ws2.write_string(0, 8, &job.date)?;
-
-        // Step labels for first table
-        for (i, label) in step_labels.iter().enumerate() {
-            ws2.write_string(STEP_START_ROW_T1 + i as u32, 0, label)?;
-        }
-
-        // weight[1] — first table
-        if shape.weights.len() > 1 {
-            let w1 = &shape.weights[1];
-            write_steps(ws2, &w1.steps, STEP_START_ROW_T1, num_steps)?;
-            ws2.write_string(label_t1, 0, &w1.label)?;
-            ws2.write_string(label_t1, 8, &dot_shape)?;
-        }
-
-        // Step labels for second table
-        for (i, label) in step_labels.iter().enumerate() {
-            ws2.write_string(step_start_t2 + i as u32, 0, label)?;
-        }
-
-        // weight[2] — second table
-        if shape.weights.len() > 2 {
-            let w2 = &shape.weights[2];
-            write_steps(ws2, &w2.steps, step_start_t2, num_steps)?;
-            ws2.write_string(label_t2, 0, &w2.label)?;
-            ws2.write_string(label_t2, 8, &dot_shape)?;
-
-            // Fix second table formulas (F column)
-            for i in 0..num_steps {
-                let r = step_start_t2 + i;
-                // 0-indexed: F = col 5, B = col 1, E = col 4
-                let formula = format!(
-                    "=SUM(B{}:E{})/4",
-                    r + 1, // Excel 1-indexed for formula references
-                    r + 1
-                );
-                ws2.write_formula(r, 5, rust_xlsxwriter::Formula::new(formula))?;
+            if let Some(w2) = shape.weights.get(2) {
+                write_steps(ws, &w2.steps, step_start_t2, num_steps);
+                ws.get_cell_mut(addr(1, label_t2)).set_value(&w2.label);
+                ws.get_cell_mut(addr(9, label_t2)).set_value(&dot_shape);
+                fix_second_table_formulas(ws, step_start_t2, num_steps);
             }
         }
     }
 
-    // Set up page layout for all sheets (A4, portrait, fit-to-width)
-    // Note: rust_xlsxwriter handles this per-worksheet during creation
-
     if let Some(parent) = output_path.parent() {
         std::fs::create_dir_all(parent)
-            .with_context(|| format!("Failed to create dir: {}", parent.display()))?;
+            .with_context(|| format!("Failed to create output dir: {}", parent.display()))?;
     }
 
-    workbook
-        .save(output_path)
-        .with_context(|| format!("Failed to save Excel: {}", output_path.display()))?;
+    umya_spreadsheet::writer::xlsx::write(&book, output_path)
+        .map_err(|e| anyhow::anyhow!("Failed to write Excel: {:?}", e))?;
 
     Ok(())
 }
 
+/// Write step data rows into columns B–E starting at `start_row`.
 fn write_steps(
-    ws: &mut Worksheet,
+    ws: &mut umya_spreadsheet::Worksheet,
     steps: &[[f64; 4]],
     start_row: u32,
     num_steps: u32,
-) -> Result<()> {
+) {
     for ri in 0..num_steps as usize {
         if ri >= steps.len() {
             break;
@@ -144,12 +165,40 @@ fn write_steps(
         let row_data = &steps[ri];
         let excel_row = start_row + ri as u32;
         for (ci, &col) in DATA_COLS.iter().enumerate() {
-            let value = if ci < 4 { row_data[ci] } else { 0.0 };
-            if value != 0.0 {
-                ws.write_number(excel_row, col, value)?;
+            let v = row_data[ci];
+            if v != 0.0 {
+                ws.get_cell_mut(addr(col, excel_row)).set_value(fmt_num(v));
             }
-            // Write nothing (blank) for zero values so formulas read as empty
         }
     }
+}
+
+/// Overwrite the F-column formulas in the second table with correct row references.
+/// The original template has a copy-paste error (references offset by 2 rows).
+fn fix_second_table_formulas(
+    ws: &mut umya_spreadsheet::Worksheet,
+    start_row: u32,
+    num_steps: u32,
+) {
+    for i in 0..num_steps {
+        let r = start_row + i;
+        // Write as formula string; umya-spreadsheet treats "=..." values as formulas.
+        ws.get_cell_mut(addr(6, r))
+            .set_value(format!("=SUM(B{r}:E{r})/4"));
+    }
+}
+
+/// Append a new sheet pair by cloning the first two sheets in the workbook.
+/// Clears data cells so the cloned sheets start blank.
+fn clone_first_pair(book: &mut umya_spreadsheet::Spreadsheet) -> Result<()> {
+    let existing_count = book.get_sheet_collection().len();
+    let new_single_name = format!("Sheet{}", existing_count + 1);
+    let new_dual_name = format!("Sheet{}", existing_count + 2);
+
+    book.new_sheet(&new_single_name)
+        .map_err(|e| anyhow::anyhow!("Failed to add sheet: {:?}", e))?;
+    book.new_sheet(&new_dual_name)
+        .map_err(|e| anyhow::anyhow!("Failed to add sheet: {:?}", e))?;
+
     Ok(())
 }

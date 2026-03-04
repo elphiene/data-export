@@ -44,7 +44,7 @@ pub fn build_placeholders(
         if job.set_number.is_empty() {
             String::new()
         } else {
-            format!("SET {}", job.set_number)
+            format!("Set {}", job.set_number)
         },
     );
     ph.insert(
@@ -52,7 +52,7 @@ pub fn build_placeholders(
         if job.job_number.is_empty() {
             String::new()
         } else {
-            format!("JN {}", job.job_number)
+            format!("Job {}", job.job_number)
         },
     );
     ph.insert("<<SHAPE>>".into(), shape.name.clone());

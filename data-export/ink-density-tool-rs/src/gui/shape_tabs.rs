@@ -162,6 +162,26 @@ impl ShapeNotebookState {
     pub fn get_all_shapes(&self) -> Vec<ShapeData> {
         self.tabs.iter().map(|t| t.to_shape_data()).collect()
     }
+
+    /// Clear the currently visible weight grid.
+    pub fn clear_current_weight(&mut self) {
+        let si = self.selected_shape;
+        if let Some(tab) = self.tabs.get_mut(si) {
+            let wi = tab.selected_weight;
+            if let Some(grid) = tab.weight_grids.get_mut(wi) {
+                grid.clear();
+            }
+        }
+    }
+
+    /// Clear all weight grids across all shapes.
+    pub fn clear_all_weights(&mut self) {
+        for tab in &mut self.tabs {
+            for grid in &mut tab.weight_grids {
+                grid.clear();
+            }
+        }
+    }
 }
 
 /// Draw the shape notebook UI. Returns true if any data changed.
