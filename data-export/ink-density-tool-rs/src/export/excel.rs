@@ -113,7 +113,7 @@ pub fn export_excel(job: &JobConfig, output_path: &Path) -> Result<()> {
             ws.get_cell_mut(addr(1, 1)).set_value(&title);
             ws.get_cell_mut(addr(9, 1)).set_value(&job.date);
 
-            write_diff_headers(ws, 1, 2);
+            write_diff_headers(ws, 1, 2, Some(STEP_START_ROW_T1 - 1));
             if let Some(w0) = shape.weights.get(0) {
                 write_steps(ws, &w0.steps, STEP_START_ROW_T1, num_steps);
                 write_per_colour_diff(ws, STEP_START_ROW_T1, num_steps);
@@ -131,7 +131,7 @@ pub fn export_excel(job: &JobConfig, output_path: &Path) -> Result<()> {
             ws.get_cell_mut(addr(1, 1)).set_value(&title);
             ws.get_cell_mut(addr(9, 1)).set_value(&job.date);
 
-            write_diff_headers(ws, 1, 2);
+            write_diff_headers(ws, 1, 2, Some(STEP_START_ROW_T1 - 1));
             if let Some(w1) = shape.weights.get(1) {
                 write_steps(ws, &w1.steps, STEP_START_ROW_T1, num_steps);
                 write_per_colour_diff(ws, STEP_START_ROW_T1, num_steps);
@@ -141,7 +141,7 @@ pub fn export_excel(job: &JobConfig, output_path: &Path) -> Result<()> {
 
             if let Some(w2) = shape.weights.get(2) {
                 write_steps(ws, &w2.steps, step_start_t2, num_steps);
-                write_diff_headers(ws, step_start_t2 - 2, step_start_t2 - 1);
+                write_diff_headers(ws, step_start_t2 - 2, step_start_t2 - 1, None);
                 write_per_colour_diff(ws, step_start_t2, num_steps);
                 ws.get_cell_mut(addr(1, label_t2)).set_value(&w2.label);
                 ws.get_cell_mut(addr(9, label_t2)).set_value(&dot_shape);
@@ -183,22 +183,60 @@ fn write_steps(
     }
 }
 
-/// Write "Difference" heading and C/M/Y/K subheaders in columns J–M.
-fn write_diff_headers(ws: &mut umya_spreadsheet::Worksheet, heading_row: u32, subheader_row: u32) {
-    ws.get_cell_mut(addr(DIFF_COLS[0], heading_row))
-        .set_value("Difference");
+/// Write "Difference" heading, C/M/Y/K subheaders, and (optionally) a separator row
+/// in columns J–M, copying border/fill/alignment styles from the CMYK reference cells.
+///
+/// `separator_row`: pass `Some(row)` when there is a blank row between the subheader
+/// and the first data row (table 1 only — row 3 in the standard layout).  Pass `None`
+/// for table 2 where the subheader sits immediately above the data.
+fn write_diff_headers(
+    ws: &mut umya_spreadsheet::Worksheet,
+    heading_row: u32,
+    subheader_row: u32,
+    separator_row: Option<u32>,
+) {
+    // --- Heading row: copy style from B1 (bottom:medium border, same for all cols) ---
+    for &col in &DIFF_COLS {
+        let style = ws.get_style(addr(2, 1)).clone();
+        ws.set_style(addr(col, heading_row), style);
+    }
+    ws.get_cell_mut(addr(DIFF_COLS[0], heading_row)).set_value("Difference");
+
+    // --- Subheader row: copy CMYK fills + borders from B2/C2/D2/E2 ---
     for (i, &col) in DIFF_COLS.iter().enumerate() {
-        let label = ["C", "M", "Y", "K"][i];
-        ws.get_cell_mut(addr(col, subheader_row)).set_value(label);
+        let style = ws.get_style(addr(DATA_COLS[i], 2)).clone();
+        ws.set_style(addr(col, subheader_row), style);
+        ws.get_cell_mut(addr(col, subheader_row))
+            .set_value(["C", "M", "Y", "K"][i]);
+    }
+
+    // --- Separator row: copy top:thin|bottom:medium style from B3/C3/D3/E3 ---
+    if let Some(sep) = separator_row {
+        for (i, &col) in DIFF_COLS.iter().enumerate() {
+            let style = ws.get_style(addr(DATA_COLS[i], 3)).clone();
+            ws.set_style(addr(col, sep), style);
+        }
     }
 }
 
-/// Write per-colour diff formulas (=H{r}-B{r} … =H{r}-E{r}) in columns J–M.
-fn write_per_colour_diff(ws: &mut umya_spreadsheet::Worksheet, step_start_row: u32, num_steps: u32) {
+/// Write per-colour diff formulas (=H{r}-B{r} … =H{r}-E{r}) in columns J–M,
+/// copying left/right border and centre-alignment styles from B4/C4/D4/E4.
+fn write_per_colour_diff(
+    ws: &mut umya_spreadsheet::Worksheet,
+    step_start_row: u32,
+    num_steps: u32,
+) {
+    // Clone reference styles from the first data row of table 1 (row 4).
+    let ref_styles: Vec<umya_spreadsheet::Style> = DATA_COLS
+        .iter()
+        .map(|&src| ws.get_style(addr(src, STEP_START_ROW_T1)).clone())
+        .collect();
+
+    let ideal = col_letter(IDEAL_COL);
     for i in 0..num_steps {
         let r = step_start_row + i;
-        let ideal = col_letter(IDEAL_COL);
         for (ci, &col) in DIFF_COLS.iter().enumerate() {
+            ws.set_style(addr(col, r), ref_styles[ci].clone());
             let data_col = col_letter(DATA_COLS[ci]);
             ws.get_cell_mut(addr(col, r))
                 .set_value(format!("={ideal}{r}-{data_col}{r}"));
