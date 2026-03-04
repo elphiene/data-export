@@ -22,18 +22,14 @@ git push origin rust-version
 cd "$SCRIPT_DIR/data-export/ink-density-tool-rs"
 cargo build --release --target x86_64-pc-windows-gnu
 
-# ── 4. Zip ───────────────────────────────────────────────────────────
+# ── 4. Zip (password-protected so Gmail doesn't block the exe) ───────
 ZIP="target/InkDensityTool.zip"
-python3 -c "
-import zipfile
-z = zipfile.ZipFile('$ZIP', 'w', zipfile.ZIP_DEFLATED)
-z.write('target/x86_64-pc-windows-gnu/release/ink-density-tool.exe', 'ink-density-tool.exe')
-z.close()
-print('Zipped:', '$ZIP')
-"
+rm -f "$ZIP"
+zip -j -P "$ZIP_PASS" "$ZIP" target/x86_64-pc-windows-gnu/release/ink-density-tool.exe
+echo "Zipped: $ZIP  (password: $ZIP_PASS)"
 
 # ── 5. Email ─────────────────────────────────────────────────────────
-python3 - "$SMTP_USER" "$SMTP_PASS" "$SMTP_TO" "$ZIP" <<'PYEOF'
+python3 - "$SMTP_USER" "$SMTP_PASS" "$SMTP_TO" "$ZIP" "$ZIP_PASS" <<'PYEOF'
 import sys, smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.base import MIMEBase
@@ -41,13 +37,13 @@ from email.mime.text import MIMEText
 from email import encoders
 import os
 
-user, pw, to, zip_path = sys.argv[1:]
+user, pw, to, zip_path, zip_pass = sys.argv[1:]
 
 msg = MIMEMultipart()
 msg['From'] = user
 msg['To'] = to
 msg['Subject'] = f"InkDensityTool build — {os.path.basename(zip_path)}"
-msg.attach(MIMEText("Latest build attached.", 'plain'))
+msg.attach(MIMEText(f"Latest build attached.\n\nZip password: {zip_pass}", 'plain'))
 
 with open(zip_path, 'rb') as f:
     part = MIMEBase('application', 'octet-stream')
