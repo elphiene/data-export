@@ -22,40 +22,42 @@ git push origin rust-version
 cd "$SCRIPT_DIR/data-export/ink-density-tool-rs"
 cargo build --release --target x86_64-pc-windows-gnu
 
-# ── 4. Zip ───────────────────────────────────────────────────────────
+# ── 4. Zip (rename .exe → .bin so Gmail doesn't block the attachment) ─
 ZIP="target/InkDensityTool.zip"
+BIN="target/ink-density-tool.bin"
+cp target/x86_64-pc-windows-gnu/release/ink-density-tool.exe "$BIN"
 rm -f "$ZIP"
-zip -j "$ZIP" target/x86_64-pc-windows-gnu/release/ink-density-tool.exe
+zip -j "$ZIP" "$BIN"
 echo "Zipped: $ZIP"
 
-# ── 5. GitHub Release + email link ───────────────────────────────────
-TAG="build-$(date '+%Y%m%d-%H%M%S')"
-cd "$SCRIPT_DIR"
-gh release create "$TAG" \
-  "data-export/ink-density-tool-rs/$ZIP" \
-  --title "InkDensityTool $TAG" \
-  --notes "Automated build from rust-version branch." \
-  --prerelease
-DOWNLOAD_URL="https://github.com/elphiene/data-export/releases/download/$TAG/InkDensityTool.zip"
-echo "Release URL: $DOWNLOAD_URL"
-
-python3 - "$SMTP_USER" "$SMTP_PASS" "$SMTP_TO" "$DOWNLOAD_URL" <<'PYEOF'
+# ── 5. Email with attachment ──────────────────────────────────────────
+python3 - "$SMTP_USER" "$SMTP_PASS" "$SMTP_TO" "$ZIP" <<'PYEOF'
 import sys, smtplib
+from email.mime.multipart import MIMEMultipart
+from email.mime.base import MIMEBase
 from email.mime.text import MIMEText
+from email import encoders
+import os
 
-user, pw, to, url = sys.argv[1:]
+user, pw, to, zip_path = sys.argv[1:]
 
-body = f"""New InkDensityTool build ready.
-
-Download: {url}
-
-(GitHub release — no expiry, login not required to download)
-"""
-
-msg = MIMEText(body, 'plain')
+msg = MIMEMultipart()
 msg['From'] = user
 msg['To'] = to
 msg['Subject'] = "InkDensityTool build ready"
+msg.attach(MIMEText(
+    "Latest build attached.\n\n"
+    "The exe is renamed to .bin to get past Gmail.\n"
+    "On Windows: extract, then rename ink-density-tool.bin → ink-density-tool.exe",
+    'plain'
+))
+
+with open(zip_path, 'rb') as f:
+    part = MIMEBase('application', 'octet-stream')
+    part.set_payload(f.read())
+    encoders.encode_base64(part)
+    part.add_header('Content-Disposition', 'attachment; filename="InkDensityTool.zip"')
+    msg.attach(part)
 
 with smtplib.SMTP('smtp.gmail.com', 587) as s:
     s.ehlo()

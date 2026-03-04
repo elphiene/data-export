@@ -2,6 +2,9 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Workflow constraints
+- **GitHub is blocked at the user's workplace.** Never suggest GitHub releases, raw GitHub URLs, or any github.com link as a file delivery method.
+
 ## Project Overview
 
 **Ink Density Tool** — a desktop application for print industry professionals to record CMYK ink density readings from an X-Rite eXact spectrodensitometer, then export data to Adobe Illustrator-generated PDFs and Excel workbooks.
