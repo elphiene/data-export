@@ -22,29 +22,34 @@ git push origin rust-version
 cd "$SCRIPT_DIR/data-export/ink-density-tool-rs"
 cargo build --release --target x86_64-pc-windows-gnu
 
-# ── 4. Zip (password-protected so Gmail doesn't block the exe) ───────
+# ── 4. Zip ───────────────────────────────────────────────────────────
 ZIP="target/InkDensityTool.zip"
 rm -f "$ZIP"
-zip -j -P "$ZIP_PASS" "$ZIP" target/x86_64-pc-windows-gnu/release/ink-density-tool.exe
-echo "Zipped: $ZIP  (password: $ZIP_PASS)"
+zip -j "$ZIP" target/x86_64-pc-windows-gnu/release/ink-density-tool.exe
+echo "Zipped: $ZIP"
 
-# ── 5. Upload & email link ────────────────────────────────────────────
-echo "Uploading to 0x0.st..."
-DOWNLOAD_URL=$(curl -# -F"file=@$ZIP" https://0x0.st)
-echo "Upload URL: $DOWNLOAD_URL"
+# ── 5. GitHub Release + email link ───────────────────────────────────
+TAG="build-$(date '+%Y%m%d-%H%M%S')"
+cd "$SCRIPT_DIR"
+gh release create "$TAG" \
+  "data-export/ink-density-tool-rs/$ZIP" \
+  --title "InkDensityTool $TAG" \
+  --notes "Automated build from rust-version branch." \
+  --prerelease
+DOWNLOAD_URL=$(gh release view "$TAG" --json assets --jq '.assets[0].browserDownloadUrl')
+echo "Release URL: $DOWNLOAD_URL"
 
-python3 - "$SMTP_USER" "$SMTP_PASS" "$SMTP_TO" "$DOWNLOAD_URL" "$ZIP_PASS" <<'PYEOF'
+python3 - "$SMTP_USER" "$SMTP_PASS" "$SMTP_TO" "$DOWNLOAD_URL" <<'PYEOF'
 import sys, smtplib
 from email.mime.text import MIMEText
 
-user, pw, to, url, zip_pass = sys.argv[1:]
+user, pw, to, url = sys.argv[1:]
 
 body = f"""New InkDensityTool build ready.
 
 Download: {url}
-Zip password: {zip_pass}
 
-Link expires in 14 days.
+(GitHub release — no expiry, login not required to download)
 """
 
 msg = MIMEText(body, 'plain')
