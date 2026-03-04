@@ -29,8 +29,8 @@ zip -j -P "$ZIP_PASS" "$ZIP" target/x86_64-pc-windows-gnu/release/ink-density-to
 echo "Zipped: $ZIP  (password: $ZIP_PASS)"
 
 # ── 5. Upload & email link ────────────────────────────────────────────
-echo "Uploading to transfer.sh..."
-DOWNLOAD_URL=$(curl --progress-bar --upload-file "$ZIP" "https://transfer.sh/InkDensityTool.zip")
+echo "Uploading to 0x0.st..."
+DOWNLOAD_URL=$(curl -# -F"file=@$ZIP" https://0x0.st)
 echo "Upload URL: $DOWNLOAD_URL"
 
 python3 - "$SMTP_USER" "$SMTP_PASS" "$SMTP_TO" "$DOWNLOAD_URL" "$ZIP_PASS" <<'PYEOF'
