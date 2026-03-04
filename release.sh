@@ -28,29 +28,29 @@ rm -f "$ZIP"
 zip -j -P "$ZIP_PASS" "$ZIP" target/x86_64-pc-windows-gnu/release/ink-density-tool.exe
 echo "Zipped: $ZIP  (password: $ZIP_PASS)"
 
-# ── 5. Email ─────────────────────────────────────────────────────────
-python3 - "$SMTP_USER" "$SMTP_PASS" "$SMTP_TO" "$ZIP" "$ZIP_PASS" <<'PYEOF'
+# ── 5. Upload & email link ────────────────────────────────────────────
+echo "Uploading to transfer.sh..."
+DOWNLOAD_URL=$(curl --progress-bar --upload-file "$ZIP" "https://transfer.sh/InkDensityTool.zip")
+echo "Upload URL: $DOWNLOAD_URL"
+
+python3 - "$SMTP_USER" "$SMTP_PASS" "$SMTP_TO" "$DOWNLOAD_URL" "$ZIP_PASS" <<'PYEOF'
 import sys, smtplib
-from email.mime.multipart import MIMEMultipart
-from email.mime.base import MIMEBase
 from email.mime.text import MIMEText
-from email import encoders
-import os
 
-user, pw, to, zip_path, zip_pass = sys.argv[1:]
+user, pw, to, url, zip_pass = sys.argv[1:]
 
-msg = MIMEMultipart()
+body = f"""New InkDensityTool build ready.
+
+Download: {url}
+Zip password: {zip_pass}
+
+Link expires in 14 days.
+"""
+
+msg = MIMEText(body, 'plain')
 msg['From'] = user
 msg['To'] = to
-msg['Subject'] = f"InkDensityTool build — {os.path.basename(zip_path)}"
-msg.attach(MIMEText(f"Latest build attached.\n\nZip password: {zip_pass}", 'plain'))
-
-with open(zip_path, 'rb') as f:
-    part = MIMEBase('application', 'octet-stream')
-    part.set_payload(f.read())
-    encoders.encode_base64(part)
-    part.add_header('Content-Disposition', f'attachment; filename="{os.path.basename(zip_path)}"')
-    msg.attach(part)
+msg['Subject'] = "InkDensityTool build ready"
 
 with smtplib.SMTP('smtp.gmail.com', 587) as s:
     s.ehlo()
