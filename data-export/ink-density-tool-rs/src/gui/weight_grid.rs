@@ -31,6 +31,9 @@ pub struct WeightGridState {
     settle_time: Option<f64>,
     /// Which cell should receive focus next frame
     focus_request: Option<CellId>,
+    /// When the settle timer fires and auto-advances, the X-Rite Tab that arrives
+    /// a frame later should be swallowed so it doesn't cause a second advance.
+    advance_ignore_next_tab: bool,
 }
 
 impl WeightGridState {
@@ -55,6 +58,7 @@ impl WeightGridState {
             settle_cell: None,
             settle_time: None,
             focus_request: None,
+            advance_ignore_next_tab: false,
         }
     }
 
@@ -83,6 +87,7 @@ impl WeightGridState {
             settle_cell: None,
             settle_time: None,
             focus_request: None,
+            advance_ignore_next_tab: false,
         }
     }
 
@@ -159,6 +164,7 @@ impl WeightGridState {
         self.settle_time = None;
         self.focus_request = None;
         self.completed = false;
+        self.advance_ignore_next_tab = false;
     }
 }
 
@@ -238,22 +244,27 @@ pub fn show_weight_grid(
                     } else {
                         let old_val = state.cells[row][col].clone();
 
-                        // Check if we should request focus
-                        let should_focus = state.focus_request == Some(cell_id);
+                        // Pre-consume Tab/Enter before the TextEdit renders so egui's built-in
+                        // Tab navigation cannot also fire.  We check memory focus (last frame's
+                        // focus) rather than the not-yet-rendered response.
+                        let cell_has_focus = ui.memory(|m| m.has_focus(id));
+                        let nav_pressed = cell_has_focus
+                            && ui.input_mut(|i| {
+                                i.consume_key(egui::Modifiers::NONE, egui::Key::Tab)
+                                    || i.consume_key(egui::Modifiers::NONE, egui::Key::Enter)
+                            });
 
                         let response = ui.add_sized(
                             [60.0, 20.0],
                             egui::TextEdit::singleline(&mut state.cells[row][col])
                                 .id(id)
-                                .lock_focus(true)
                                 .horizontal_align(egui::Align::Center),
                         );
 
-                        if should_focus {
+                        // Apply queued focus request
+                        if state.focus_request == Some(cell_id) {
                             response.request_focus();
-                            if state.focus_request == Some(cell_id) {
-                                state.focus_request = None;
-                            }
+                            state.focus_request = None;
                         }
 
                         // Validate: revert if invalid
@@ -278,9 +289,11 @@ pub fn show_weight_grid(
                                     && time - st >= 0.3
                                     && !state.cells[row][col].is_empty()
                                 {
-                                    // Advance
                                     state.settle_cell = None;
                                     state.settle_time = None;
+                                    // Tell Tab/Enter handler to swallow the X-Rite's
+                                    // trailing Tab so it doesn't cause a second advance.
+                                    state.advance_ignore_next_tab = true;
 
                                     if Some(cell_id) == last_cell {
                                         state.completed = true;
@@ -292,18 +305,13 @@ pub fn show_weight_grid(
                         }
 
                         // Tab / Enter — column-major advance.
-                        // Check has_focus() + consume_key (not lost_focus + key_pressed) so that:
-                        //   1. egui's built-in Tab navigation cannot also fire (key consumed first).
-                        //   2. A settle-timer advance that moved focus HERE cannot trigger a second
-                        //      advance when the DataCatcher's Tab/Enter arrives a frame later
-                        //      (has_focus() will be false on the newly-focused cell at add_sized time).
-                        let nav_key = response.has_focus()
-                            && ui.input_mut(|i| {
-                                i.consume_key(egui::Modifiers::NONE, egui::Key::Tab)
-                                    || i.consume_key(egui::Modifiers::NONE, egui::Key::Enter)
-                            });
-                        if nav_key {
-                            if Some(cell_id) == last_cell {
+                        // nav_pressed was consumed before rendering so egui's built-in
+                        // Tab focus movement never fires; has_focus() stays true.
+                        if nav_pressed && response.has_focus() {
+                            if state.advance_ignore_next_tab {
+                                // Settle timer already advanced; eat this Tab.
+                                state.advance_ignore_next_tab = false;
+                            } else if Some(cell_id) == last_cell {
                                 state.completed = true;
                             } else if let Some(next) = state.next_cell(cell_id) {
                                 state.focus_request = Some(next);
