@@ -31,6 +31,10 @@ const STEP_START_ROW_T1: u32 = 4;
 const GAP_T1_TO_T2: u32 = 7;
 /// CMYK data columns B=2, C=3, D=4, E=5 (1-indexed).
 const DATA_COLS: [u32; 4] = [2, 3, 4, 5];
+/// Per-colour difference columns J=10, K=11, L=12, M=13 (1-indexed).
+const DIFF_COLS: [u32; 4] = [10, 11, 12, 13];
+/// Ideal% column H=8 (1-indexed).
+const IDEAL_COL: u32 = 8;
 
 fn row_constants(num_steps: u32) -> (u32, u32, u32) {
     let label_t1 = STEP_START_ROW_T1 + num_steps;
@@ -109,8 +113,10 @@ pub fn export_excel(job: &JobConfig, output_path: &Path) -> Result<()> {
             ws.get_cell_mut(addr(1, 1)).set_value(&title);
             ws.get_cell_mut(addr(9, 1)).set_value(&job.date);
 
+            write_diff_headers(ws, 1, 2);
             if let Some(w0) = shape.weights.get(0) {
                 write_steps(ws, &w0.steps, STEP_START_ROW_T1, num_steps);
+                write_per_colour_diff(ws, STEP_START_ROW_T1, num_steps);
                 ws.get_cell_mut(addr(1, label_t1)).set_value(&w0.label);
                 ws.get_cell_mut(addr(9, label_t1)).set_value(&dot_shape);
             }
@@ -125,14 +131,18 @@ pub fn export_excel(job: &JobConfig, output_path: &Path) -> Result<()> {
             ws.get_cell_mut(addr(1, 1)).set_value(&title);
             ws.get_cell_mut(addr(9, 1)).set_value(&job.date);
 
+            write_diff_headers(ws, 1, 2);
             if let Some(w1) = shape.weights.get(1) {
                 write_steps(ws, &w1.steps, STEP_START_ROW_T1, num_steps);
+                write_per_colour_diff(ws, STEP_START_ROW_T1, num_steps);
                 ws.get_cell_mut(addr(1, label_t1)).set_value(&w1.label);
                 ws.get_cell_mut(addr(9, label_t1)).set_value(&dot_shape);
             }
 
             if let Some(w2) = shape.weights.get(2) {
                 write_steps(ws, &w2.steps, step_start_t2, num_steps);
+                write_diff_headers(ws, step_start_t2 - 2, step_start_t2 - 1);
+                write_per_colour_diff(ws, step_start_t2, num_steps);
                 ws.get_cell_mut(addr(1, label_t2)).set_value(&w2.label);
                 ws.get_cell_mut(addr(9, label_t2)).set_value(&dot_shape);
                 fix_second_table_formulas(ws, step_start_t2, num_steps);
@@ -169,6 +179,29 @@ fn write_steps(
             if v != 0.0 {
                 ws.get_cell_mut(addr(col, excel_row)).set_value(fmt_num(v));
             }
+        }
+    }
+}
+
+/// Write "Difference" heading and C/M/Y/K subheaders in columns J–M.
+fn write_diff_headers(ws: &mut umya_spreadsheet::Worksheet, heading_row: u32, subheader_row: u32) {
+    ws.get_cell_mut(addr(DIFF_COLS[0], heading_row))
+        .set_value("Difference");
+    for (i, &col) in DIFF_COLS.iter().enumerate() {
+        let label = ["C", "M", "Y", "K"][i];
+        ws.get_cell_mut(addr(col, subheader_row)).set_value(label);
+    }
+}
+
+/// Write per-colour diff formulas (=H{r}-B{r} … =H{r}-E{r}) in columns J–M.
+fn write_per_colour_diff(ws: &mut umya_spreadsheet::Worksheet, step_start_row: u32, num_steps: u32) {
+    for i in 0..num_steps {
+        let r = step_start_row + i;
+        let ideal = col_letter(IDEAL_COL);
+        for (ci, &col) in DIFF_COLS.iter().enumerate() {
+            let data_col = col_letter(DATA_COLS[ci]);
+            ws.get_cell_mut(addr(col, r))
+                .set_value(format!("={ideal}{r}-{data_col}{r}"));
         }
     }
 }

@@ -245,6 +245,7 @@ pub fn show_weight_grid(
                             [60.0, 20.0],
                             egui::TextEdit::singleline(&mut state.cells[row][col])
                                 .id(id)
+                                .lock_focus(true)
                                 .horizontal_align(egui::Align::Center),
                         );
 
@@ -290,21 +291,18 @@ pub fn show_weight_grid(
                             }
                         }
 
-                        // Tab key handling — column-major order
-                        if response.lost_focus()
-                            && ui.input(|i| i.key_pressed(egui::Key::Tab))
-                        {
-                            if Some(cell_id) == last_cell {
-                                state.completed = true;
-                            } else if let Some(next) = state.next_cell(cell_id) {
-                                state.focus_request = Some(next);
-                            }
-                        }
-
-                        // Enter key — same as Tab (DataCatcher sends Return)
-                        if response.lost_focus()
-                            && ui.input(|i| i.key_pressed(egui::Key::Enter))
-                        {
+                        // Tab / Enter — column-major advance.
+                        // Check has_focus() + consume_key (not lost_focus + key_pressed) so that:
+                        //   1. egui's built-in Tab navigation cannot also fire (key consumed first).
+                        //   2. A settle-timer advance that moved focus HERE cannot trigger a second
+                        //      advance when the DataCatcher's Tab/Enter arrives a frame later
+                        //      (has_focus() will be false on the newly-focused cell at add_sized time).
+                        let nav_key = response.has_focus()
+                            && ui.input_mut(|i| {
+                                i.consume_key(egui::Modifiers::NONE, egui::Key::Tab)
+                                    || i.consume_key(egui::Modifiers::NONE, egui::Key::Enter)
+                            });
+                        if nav_key {
                             if Some(cell_id) == last_cell {
                                 state.completed = true;
                             } else if let Some(next) = state.next_cell(cell_id) {
