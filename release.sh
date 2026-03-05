@@ -22,50 +22,32 @@ git push origin rust-version
 cd "$SCRIPT_DIR/data-export/ink-density-tool-rs"
 cargo build --release --target x86_64-pc-windows-gnu
 
-# ── 4. Strip + gzip + base64 encode as .txt ──────────────────────────
-EXE="target/x86_64-pc-windows-gnu/release/ink-density-tool.exe"
-GZ="target/ink-density-tool.exe.gz"
-TXT="target/InkDensityTool.txt"
-x86_64-w64-mingw32-strip "$EXE" 2>/dev/null || true
-gzip -9 -c "$EXE" > "$GZ"
-base64 "$GZ" > "$TXT"
-SIZE=$(du -sh "$TXT" | cut -f1)
-echo "Encoded: $TXT ($SIZE)"
+# ── 4. Zip ───────────────────────────────────────────────────────────
+ZIP="target/InkDensityTool.zip"
+rm -f "$ZIP"
+zip -j "$ZIP" target/x86_64-pc-windows-gnu/release/ink-density-tool.exe
+echo "Zipped: $ZIP"
 
-# ── 5. Email with .txt attachment ─────────────────────────────────────
-python3 - "$SMTP_USER" "$SMTP_PASS" "$SMTP_TO" "$TXT" <<'PYEOF'
+# ── 5. Upload to Google Drive & email link ────────────────────────────
+DRIVE_FOLDER="InkDensityTool-builds"
+rclone copy "$ZIP" "gdrive:$DRIVE_FOLDER/"
+DOWNLOAD_URL=$(rclone link "gdrive:$DRIVE_FOLDER/InkDensityTool.zip")
+echo "Drive link: $DOWNLOAD_URL"
+
+python3 - "$SMTP_USER" "$SMTP_PASS" "$SMTP_TO" "$DOWNLOAD_URL" <<'PYEOF'
 import sys, smtplib
-from email.mime.multipart import MIMEMultipart
-from email.mime.base import MIMEBase
 from email.mime.text import MIMEText
-from email import encoders
 
-user, pw, to, txt_path = sys.argv[1:]
+user, pw, to, url = sys.argv[1:]
 
-decode_cmd = r"""$b=[Convert]::FromBase64String((Get-Content -Raw InkDensityTool.txt))
-$ms=New-Object IO.MemoryStream(,$b)
-$gz=New-Object IO.Compression.GzipStream($ms,[IO.Compression.CompressionMode]::Decompress)
-$out=New-Object IO.MemoryStream; $gz.CopyTo($out)
-[IO.File]::WriteAllBytes("$PWD\ink-density-tool.exe",$out.ToArray())"""
-
-msg = MIMEMultipart()
+msg = MIMEText(
+    f"Latest InkDensityTool build is ready on Google Drive:\n\n{url}\n\n"
+    "(Sign in with your personal Google account to download.)",
+    'plain'
+)
 msg['From'] = user
 msg['To'] = to
 msg['Subject'] = "InkDensityTool build ready"
-msg.attach(MIMEText(
-    "Latest build attached as InkDensityTool.txt.\n\n"
-    "To decode: save the attachment, open PowerShell in the same folder, paste and run:\n\n"
-    f"{decode_cmd}\n\n"
-    "Then run ink-density-tool.exe.",
-    'plain'
-))
-
-with open(txt_path, 'rb') as f:
-    part = MIMEBase('text', 'plain')
-    part.set_payload(f.read())
-    encoders.encode_base64(part)
-    part.add_header('Content-Disposition', 'attachment; filename="InkDensityTool.txt"')
-    msg.attach(part)
 
 with smtplib.SMTP('smtp.gmail.com', 587) as s:
     s.ehlo()
