@@ -25,8 +25,7 @@ cargo build --release --target x86_64-pc-windows-gnu
 # ── 4. Zip ───────────────────────────────────────────────────────────
 ZIP="target/InkDensityTool.zip"
 rm -f "$ZIP"
-cp target/x86_64-pc-windows-gnu/release/ink-density-tool.exe target/ink-density-tool.bin
-zip -j "$ZIP" target/ink-density-tool.bin
+zip -j -P "$ZIP_PASS" "$ZIP" target/x86_64-pc-windows-gnu/release/ink-density-tool.exe
 echo "Zipped: $ZIP"
 
 # ── 5. Upload to Google Drive & email link ────────────────────────────
@@ -35,15 +34,15 @@ rclone copy "$ZIP" "gdrive:$DRIVE_FOLDER/"
 DOWNLOAD_URL=$(rclone link "gdrive:$DRIVE_FOLDER/InkDensityTool.zip")
 echo "Drive link: $DOWNLOAD_URL"
 
-python3 - "$SMTP_USER" "$SMTP_PASS" "$SMTP_TO" "$DOWNLOAD_URL" <<'PYEOF'
+python3 - "$SMTP_USER" "$SMTP_PASS" "$SMTP_TO" "$DOWNLOAD_URL" "$ZIP_PASS" <<'PYEOF'
 import sys, smtplib
 from email.mime.text import MIMEText
 
-user, pw, to, url = sys.argv[1:]
+user, pw, to, url, zip_pass = sys.argv[1:]
 
 msg = MIMEText(
     f"Latest InkDensityTool build is ready on Google Drive:\n\n{url}\n\n"
-    "After downloading: extract the zip, then rename ink-density-tool.bin to ink-density-tool.exe",
+    f"Zip password: {zip_pass}",
     'plain'
 )
 msg['From'] = user
