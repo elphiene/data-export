@@ -25,7 +25,8 @@ cargo build --release --target x86_64-pc-windows-gnu
 # ── 4. Zip ───────────────────────────────────────────────────────────
 ZIP="target/InkDensityTool.zip"
 rm -f "$ZIP"
-zip -j "$ZIP" target/x86_64-pc-windows-gnu/release/ink-density-tool.exe
+cp target/x86_64-pc-windows-gnu/release/ink-density-tool.exe target/ink-density-tool.bin
+zip -j "$ZIP" target/ink-density-tool.bin
 echo "Zipped: $ZIP"
 
 # ── 5. Upload to Google Drive & email link ────────────────────────────
@@ -42,7 +43,7 @@ user, pw, to, url = sys.argv[1:]
 
 msg = MIMEText(
     f"Latest InkDensityTool build is ready on Google Drive:\n\n{url}\n\n"
-    "(Sign in with your personal Google account to download.)",
+    "After downloading: extract the zip, then rename ink-density-tool.bin to ink-density-tool.exe",
     'plain'
 )
 msg['From'] = user
