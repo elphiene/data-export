@@ -22,29 +22,21 @@ git push origin rust-version
 cd "$SCRIPT_DIR/data-export/ink-density-tool-rs"
 cargo build --release --target x86_64-pc-windows-gnu
 
-# ── 4. Zip ───────────────────────────────────────────────────────────
-ZIP="target/InkDensityTool.zip"
-rm -f "$ZIP"
-zip -j -P "$ZIP_PASS" "$ZIP" target/x86_64-pc-windows-gnu/release/ink-density-tool.exe
-echo "Zipped: $ZIP"
+# ── 4. Copy exe to brandpack-tools downloads folder ──────────────────
+EXE="target/x86_64-pc-windows-gnu/release/ink-density-tool.exe"
+DOWNLOADS="/home/el/Documents/El-Projects/brandpack-tools/server/downloads"
+cp "$EXE" "$DOWNLOADS/ink-density-tool.exe"
+DEPLOY_URL="https://eldev.cherrysofa.com/downloads/ink-density-tool.exe"
+echo "Deployed: $DEPLOY_URL"
 
-# ── 5. Upload to Google Drive & email link ────────────────────────────
-DRIVE_FOLDER="InkDensityTool-builds"
-rclone copy "$ZIP" "gdrive:$DRIVE_FOLDER/"
-DOWNLOAD_URL=$(rclone link "gdrive:$DRIVE_FOLDER/InkDensityTool.zip")
-echo "Drive link: $DOWNLOAD_URL"
-
-python3 - "$SMTP_USER" "$SMTP_PASS" "$SMTP_TO" "$DOWNLOAD_URL" "$ZIP_PASS" <<'PYEOF'
+# ── 5. Email link ─────────────────────────────────────────────────────
+python3 - "$SMTP_USER" "$SMTP_PASS" "$SMTP_TO" "$DEPLOY_URL" <<'PYEOF'
 import sys, smtplib
 from email.mime.text import MIMEText
 
-user, pw, to, url, zip_pass = sys.argv[1:]
+user, pw, to, url = sys.argv[1:]
 
-msg = MIMEText(
-    f"Latest InkDensityTool build is ready on Google Drive:\n\n{url}\n\n"
-    f"Zip password: {zip_pass}",
-    'plain'
-)
+msg = MIMEText(f"Latest InkDensityTool build ready:\n\n{url}", 'plain')
 msg['From'] = user
 msg['To'] = to
 msg['Subject'] = "InkDensityTool build ready"
