@@ -57,21 +57,21 @@ pub fn build_placeholders(
     );
     ph.insert("<<SHAPE>>".into(), shape.name.clone());
 
-    for (wi, weight) in chunk.iter().enumerate() {
-        let wn = wi + 1; // 1-indexed
-        ph.insert(format!("<<W{wn}_LABEL>>"), weight.label.clone());
+    for wn in 1..=3 {
+        let weight = chunk.get(wn - 1).copied();
+        ph.insert(format!("<<W{wn}_LABEL>>"), weight.map(|w| w.label.clone()).unwrap_or_default());
 
         // Density row
         for (ci, suffix) in COLOUR_SUFFIXES.iter().enumerate() {
-            let val = if ci < 4 { weight.density[ci] } else { 0.0 };
+            let val = weight.map(|w| w.density[ci]).unwrap_or(0.0);
             ph.insert(format!("<<W{wn}_D{suffix}>>"), fmt_value(val));
         }
 
         // Step rows (R01 … R16)
-        for (ri, row) in weight.steps.iter().enumerate() {
+        for ri in 0..16 {
             let rn = ri + 1;
             for (ci, suffix) in COLOUR_SUFFIXES.iter().enumerate() {
-                let val = if ci < 4 { row[ci] } else { 0.0 };
+                let val = weight.and_then(|w| w.steps.get(ri)).map(|row| row[ci]).unwrap_or(0.0);
                 ph.insert(format!("<<W{wn}_R{rn:02}_{suffix}>>"), fmt_value(val));
             }
         }

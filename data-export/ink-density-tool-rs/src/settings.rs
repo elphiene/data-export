@@ -12,12 +12,8 @@ const APP_NAME: &str = "InkDensityTool";
 fn default_settings() -> HashMap<String, Value> {
     let mut m = HashMap::new();
     m.insert("illustrator_path".into(), Value::String(String::new()));
-    m.insert("ai_template_1lpi".into(), Value::String(String::new()));
-    m.insert("ai_template_2lpi".into(), Value::String(String::new()));
-    m.insert("ai_template_3lpi".into(), Value::String(String::new()));
-    m.insert("ai_template_1lpi_extended".into(), Value::String(String::new()));
-    m.insert("ai_template_2lpi_extended".into(), Value::String(String::new()));
-    m.insert("ai_template_3lpi_extended".into(), Value::String(String::new()));
+    m.insert("ai_template".into(), Value::String(String::new()));
+    m.insert("ai_template_extended".into(), Value::String(String::new()));
     m.insert(
         "default_weight_labels".into(),
         serde_json::json!(["120#", "150#", "200#"]),

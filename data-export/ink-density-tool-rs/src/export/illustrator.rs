@@ -45,15 +45,6 @@ pub fn find_illustrator() -> Option<String> {
     None
 }
 
-fn get_lpi_templates(num_steps: usize) -> HashMap<usize, String> {
-    let suffix = if num_steps > 14 { "_extended" } else { "" };
-    let mut m = HashMap::new();
-    for n in 1..=3 {
-        m.insert(n, settings::get_str(&format!("ai_template_{n}lpi{suffix}")));
-    }
-    m
-}
-
 fn jsx_escape_path(p: &str) -> String {
     p.replace('\\', "/").replace('"', "\\\"")
 }
@@ -89,20 +80,10 @@ pub fn export_pdf(job: &JobConfig, output_path: &Path) -> Result<()> {
         .context("Illustrator.exe not found. Please set the path in Settings.")?;
 
     let num_steps = job.num_steps();
-    let lpi_templates = get_lpi_templates(num_steps);
-
-    let missing: Vec<usize> = (1..=3)
-        .filter(|n| {
-            let t = &lpi_templates[n];
-            t.is_empty() || !Path::new(t).is_file()
-        })
-        .collect();
-    if !missing.is_empty() {
-        let labels: Vec<String> = missing.iter().map(|n| n.to_string()).collect();
-        bail!(
-            "Missing Illustrator template(s) for {} LPI. Please set all three template paths in Settings.",
-            labels.join(", ")
-        );
+    let suffix = if num_steps > 14 { "_extended" } else { "" };
+    let template_path = settings::get_str(&format!("ai_template{suffix}"));
+    if template_path.is_empty() || !Path::new(&template_path).is_file() {
+        bail!("Illustrator template not set. Please set the template path in Settings.");
     }
 
     if job.shapes.is_empty() {
@@ -121,7 +102,6 @@ pub fn export_pdf(job: &JobConfig, output_path: &Path) -> Result<()> {
         let chunks = chunk_weights(&shape.weights, 3);
 
         for (chunk_idx, chunk) in chunks.iter().enumerate() {
-            let template_path = &lpi_templates[&chunk.len()];
             let safe_name: String = shape
                 .name
                 .chars()
@@ -130,7 +110,7 @@ pub fn export_pdf(job: &JobConfig, output_path: &Path) -> Result<()> {
             let out_pdf = tmp_dir.path().join(format!("{safe_name}_chunk{chunk_idx}.pdf"));
 
             let placeholders = build_placeholders(job, shape, chunk);
-            let jsx_source = render_jsx(&placeholders, template_path, &out_pdf.to_string_lossy());
+            let jsx_source = render_jsx(&placeholders, &template_path, &out_pdf.to_string_lossy());
 
             let jsx_path = tmp_dir.path().join(format!("{safe_name}_chunk{chunk_idx}.jsx"));
             std::fs::write(&jsx_path, &jsx_source)

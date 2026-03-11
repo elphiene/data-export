@@ -36,12 +36,8 @@ pub struct InkDensityApp {
 
     // Templates dialog
     show_templates_dialog: bool,
-    tmpl_1lpi: String,
-    tmpl_2lpi: String,
-    tmpl_3lpi: String,
-    tmpl_1lpi_ext: String,
-    tmpl_2lpi_ext: String,
-    tmpl_3lpi_ext: String,
+    tmpl_standard: String,
+    tmpl_extended: String,
 }
 
 impl InkDensityApp {
@@ -59,12 +55,8 @@ impl InkDensityApp {
             rename_shape_name: String::new(),
             rename_shape_idx: 0,
             show_templates_dialog: false,
-            tmpl_1lpi: settings::get_str("ai_template_1lpi"),
-            tmpl_2lpi: settings::get_str("ai_template_2lpi"),
-            tmpl_3lpi: settings::get_str("ai_template_3lpi"),
-            tmpl_1lpi_ext: settings::get_str("ai_template_1lpi_extended"),
-            tmpl_2lpi_ext: settings::get_str("ai_template_2lpi_extended"),
-            tmpl_3lpi_ext: settings::get_str("ai_template_3lpi_extended"),
+            tmpl_standard: settings::get_str("ai_template"),
+            tmpl_extended: settings::get_str("ai_template_extended"),
         };
         app.load_initial_session();
         app
@@ -553,12 +545,8 @@ impl eframe::App for InkDensityApp {
                 .show(ctx, |ui| {
                     egui::Grid::new("tmpl_grid").num_columns(3).spacing([8.0, 4.0]).show(ui, |ui| {
                         let entries: &mut [(&str, &str, &mut String)] = &mut [
-                            ("1 LPI (standard)",  "ai_template_1lpi",           &mut self.tmpl_1lpi),
-                            ("2 LPI (standard)",  "ai_template_2lpi",           &mut self.tmpl_2lpi),
-                            ("3 LPI (standard)",  "ai_template_3lpi",           &mut self.tmpl_3lpi),
-                            ("1 LPI (extended)",  "ai_template_1lpi_extended",  &mut self.tmpl_1lpi_ext),
-                            ("2 LPI (extended)",  "ai_template_2lpi_extended",  &mut self.tmpl_2lpi_ext),
-                            ("3 LPI (extended)",  "ai_template_3lpi_extended",  &mut self.tmpl_3lpi_ext),
+                            ("Standard (14 steps)", "ai_template",          &mut self.tmpl_standard),
+                            ("Extended (16 steps)", "ai_template_extended", &mut self.tmpl_extended),
                         ];
                         for (label, key, path) in entries.iter_mut() {
                             ui.label(*label);
@@ -578,12 +566,8 @@ impl eframe::App for InkDensityApp {
                     });
                     ui.add_space(4.0);
                     if ui.button("Save & Close").clicked() {
-                        settings::set_str("ai_template_1lpi",          &self.tmpl_1lpi);
-                        settings::set_str("ai_template_2lpi",          &self.tmpl_2lpi);
-                        settings::set_str("ai_template_3lpi",          &self.tmpl_3lpi);
-                        settings::set_str("ai_template_1lpi_extended", &self.tmpl_1lpi_ext);
-                        settings::set_str("ai_template_2lpi_extended", &self.tmpl_2lpi_ext);
-                        settings::set_str("ai_template_3lpi_extended", &self.tmpl_3lpi_ext);
+                        settings::set_str("ai_template",          &self.tmpl_standard);
+                        settings::set_str("ai_template_extended", &self.tmpl_extended);
                         self.show_templates_dialog = false;
                     }
                 });

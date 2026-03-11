@@ -19,6 +19,10 @@ There are two implementations:
 ```bash
 cd data-export/ink-density-tool-rs
 
+# Linux build deps (Debian/Ubuntu — needed for egui/eframe)
+# sudo apt-get install libgtk-3-dev libxcb-render0-dev libxcb-shape0-dev \
+#   libxcb-xfixes0-dev libxkbcommon-dev libssl-dev
+
 # Run in dev mode (Linux — GUI works, Illustrator export falls back to LibreOffice)
 cargo run
 
@@ -42,7 +46,14 @@ cd data-export/ink-density-tool && pyinstaller build.spec
 # Output: dist/InkDensityTool.exe
 ```
 
-There is no test suite. The GitHub Actions workflow (`.github/workflows/build.yml`) still targets the Python version and produces an `InkDensityTool.exe` GitHub Release on pushes to `main` that touch `data-export/ink-density-tool/**`.
+```bash
+# Run tests (currently only session round-trip tests exist)
+cargo test
+```
+
+### CI Workflows
+- `.github/workflows/build-rust.yml` — builds + tests Rust version on Windows and Linux; triggers on pushes to `rust-version` that touch `data-export/ink-density-tool-rs/**`; uploads Windows EXE as artifact
+- `.github/workflows/build.yml` — Python version; produces `InkDensityTool.exe` GitHub Release on pushes to `main` that touch `data-export/ink-density-tool/**`
 
 ## Architecture
 
@@ -70,7 +81,7 @@ src/
 │   ├── shape_tabs.rs          # Shape tab switcher + inner weight tabs
 │   └── weight_grid.rs         # Data-entry grid; column-major focus order
 └── export/
-    ├── placeholders.rs        # <<PLACEHOLDER>> dict builder; shared by PDF paths
+    ├── placeholders.rs        # <<PLACEHOLDER>> dict builder; shared by PDF paths (private mod)
     ├── illustrator.rs         # JSX substitution → Illustrator.exe subprocess (Windows)
     ├── libreoffice.rs         # LibreOffice headless UNO bridge (Linux)
     ├── excel.rs               # umya-spreadsheet template fill
@@ -85,7 +96,7 @@ src/
 5. **DataCatcher auto-advance**: 300 ms settle timer per field using `ui.input(|i| i.time)`; if still focused and non-empty after timer, advances focus automatically
 
 **Export flow:**
-- PDF: `placeholders::build_placeholders` builds `<<W1_DC>>`, `<<W1_R01_C>>`, etc.; weights split into chunks of ≤3 (1/2/3 LPI template slots); on Windows calls `Illustrator.exe /b <temp.jsx>`, on Linux calls LibreOffice UNO; chunks merged via `pdf_merge`
+- PDF: `placeholders::build_placeholders` builds `<<W1_DC>>`, `<<W1_R01_C>>`, etc.; weights split into chunks of ≤3 (W1/W2/W3 slots in a single template); on Windows calls `Illustrator.exe /b <temp.jsx>`, on Linux calls LibreOffice UNO (via embedded `lo_uno_helper.py` + JSON placeholder dict); chunks merged via `pdf_merge`
 - Excel: `excel.rs` picks `template_standard.xlsx` (14 steps) or `template_extended.xlsx` (16 steps); fills placeholders; adds sheet pairs for extra shapes
 - Exports run on `std::thread::spawn` daemon threads; status fed back via `Arc<Mutex<ExportStatus>>`
 
@@ -122,9 +133,10 @@ ink-density-tool/
 - **Column-major Tab order is intentional** — matches X-Rite eXact scan sequence; do not change to row-major
 - **Non-destructive Illustrator workflow** — templates opened as copies, never saved
 - **PDF/X-4:2008** preset used for print-ready output
-- Assets (`runner.jsx`, `*.xlsx` templates) are embedded in both builds
+- Assets (`runner.jsx`, `lo_uno_helper.py`, `*.xlsx` templates) are embedded in both builds
+- `data-export/ink-density-tool-rs/TEMPLATE_GUIDE.md` documents all `<<PLACEHOLDER>>` names used in Illustrator `.ai` templates
 
 ### Settings Keys (both implementations)
 - `illustrator_path` — path to `Illustrator.exe`
-- `ai_template_1lpi` / `_2lpi` / `_3lpi` (+ `_extended` variants) — `.ai` master template paths
+- `ai_template` / `ai_template_extended` — `.ai` master template paths (standard 14-step / extended 16-step); each template contains W1/W2/W3 slots for up to 3 weights per page
 - `default_weight_labels`, `default_step_labels`, `last_session_path`
