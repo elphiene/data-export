@@ -21,3 +21,6 @@ DGC-curve-calculator.xlsx
 # OS
 .DS_Store
 Thumbs.db
+
+# SMTP credentials — never commit
+.env
