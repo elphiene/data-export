@@ -115,6 +115,7 @@ pub fn export_excel(job: &JobConfig, output_path: &Path) -> Result<()> {
 
             write_diff_headers(ws, 1, 2, Some(STEP_START_ROW_T1 - 1));
             if let Some(w0) = shape.weights.get(0) {
+                write_density(ws, &w0.density, STEP_START_ROW_T1 - 1);
                 write_steps(ws, &w0.steps, STEP_START_ROW_T1, num_steps);
                 write_per_colour_diff(ws, STEP_START_ROW_T1, num_steps);
                 ws.get_cell_mut(addr(1, label_t1)).set_value(&w0.label);
@@ -133,6 +134,7 @@ pub fn export_excel(job: &JobConfig, output_path: &Path) -> Result<()> {
 
             write_diff_headers(ws, 1, 2, Some(STEP_START_ROW_T1 - 1));
             if let Some(w1) = shape.weights.get(1) {
+                write_density(ws, &w1.density, STEP_START_ROW_T1 - 1);
                 write_steps(ws, &w1.steps, STEP_START_ROW_T1, num_steps);
                 write_per_colour_diff(ws, STEP_START_ROW_T1, num_steps);
                 ws.get_cell_mut(addr(1, label_t1)).set_value(&w1.label);
@@ -140,6 +142,7 @@ pub fn export_excel(job: &JobConfig, output_path: &Path) -> Result<()> {
             }
 
             if let Some(w2) = shape.weights.get(2) {
+                write_density(ws, &w2.density, step_start_t2 - 1);
                 write_steps(ws, &w2.steps, step_start_t2, num_steps);
                 write_diff_headers(ws, step_start_t2 - 2, step_start_t2 - 1, None);
                 write_per_colour_diff(ws, step_start_t2, num_steps);
@@ -159,6 +162,20 @@ pub fn export_excel(job: &JobConfig, output_path: &Path) -> Result<()> {
         .map_err(|e| anyhow::anyhow!("Failed to write Excel: {:?}", e))?;
 
     Ok(())
+}
+
+/// Write the four density values (C/M/Y/K) into columns B–E at `density_row`.
+fn write_density(
+    ws: &mut umya_spreadsheet::Worksheet,
+    density: &[f64; 4],
+    density_row: u32,
+) {
+    for (ci, &col) in DATA_COLS.iter().enumerate() {
+        let v = density[ci];
+        if v != 0.0 {
+            ws.get_cell_mut(addr(col, density_row)).set_value(fmt_num(v));
+        }
+    }
 }
 
 /// Write step data rows into columns B–E starting at `start_row`.

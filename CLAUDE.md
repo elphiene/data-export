@@ -9,13 +9,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Ink Density Tool** — a desktop application for print industry professionals to record CMYK ink density readings from an X-Rite eXact spectrodensitometer, then export data to Adobe Illustrator-generated PDFs and Excel workbooks.
 
-There are two implementations:
-- **Python/Tkinter** (`data-export/ink-density-tool/`) — original, ships as `InkDensityTool.exe` via PyInstaller
-- **Rust/egui** (`data-export/ink-density-tool-rs/`) — active rewrite on the `rust-version` branch
+Implemented in Rust/egui (`data-export/ink-density-tool-rs/`).
 
 ## Commands
 
-### Rust version (active development)
 ```bash
 cd data-export/ink-density-tool-rs
 
@@ -31,33 +28,28 @@ cargo build --release
 
 # Cross-compile Windows EXE from Linux (requires mingw toolchain)
 cargo build --release --target x86_64-pc-windows-gnu
-```
 
-### Python version
-```bash
-# Install dependencies
-pip install -r data-export/ink-density-tool/requirements.txt
-
-# Run (Linux dev mode — Illustrator export won't work)
-python data-export/ink-density-tool/main.py
-
-# Build Windows EXE
-cd data-export/ink-density-tool && pyinstaller build.spec
-# Output: dist/InkDensityTool.exe
-```
-
-```bash
 # Run tests (currently only session round-trip tests exist)
 cargo test
 ```
 
+### Release
+```bash
+# From repo root — full release cycle: commit+push, cross-compile, deploy, email
+./release.sh "optional commit message"
+```
+`release.sh` requires a `.env` file (see `.env.example`) with SMTP credentials. It:
+1. Commits + pushes to `rust-version`
+2. Cross-compiles the Windows EXE
+3. Copies `ink-density-tool.exe` to `brandpack-tools/server/downloads/` (served at `https://eldev.cherrysofa.com/downloads/ink-density-tool.exe`)
+4. Emails the download link to the recipient — this is the delivery mechanism since GitHub is blocked at the workplace
+
 ### CI Workflows
 - `.github/workflows/build-rust.yml` — builds + tests Rust version on Windows and Linux; triggers on pushes to `rust-version` that touch `data-export/ink-density-tool-rs/**`; uploads Windows EXE as artifact
-- `.github/workflows/build.yml` — Python version; produces `InkDensityTool.exe` GitHub Release on pushes to `main` that touch `data-export/ink-density-tool/**`
 
 ## Architecture
 
-### Shared Data Model (both implementations)
+### Data Model
 `JobConfig` → `shapes: list[ShapeData]` → `weights: list[WeightData]`
 - `WeightData`: `label`, `density[4]` (C/M/Y/K max density), `steps[N][4]` (14 or 16 step rows × 4 colours)
 - Step presets: `STEP_LABELS_14` (100→1) and `STEP_LABELS_16` (100→0.4)
@@ -100,43 +92,15 @@ src/
 - Excel: `excel.rs` picks `template_standard.xlsx` (14 steps) or `template_extended.xlsx` (16 steps); fills placeholders; adds sheet pairs for extra shapes
 - Exports run on `std::thread::spawn` daemon threads; status fed back via `Arc<Mutex<ExportStatus>>`
 
-### Python Implementation (`ink-density-tool/`)
-
-**Stack:** Tkinter for GUI, `openpyxl` for Excel, `pypdf` for PDF merge, `pyinstaller` for packaging.
-
-```
-ink-density-tool/
-├── main.py               # Entry point
-├── settings.py           # JSON-backed key-value store (%APPDATA%/InkDensityTool/)
-├── core/
-│   ├── models.py         # Dataclasses: JobConfig, ShapeData, WeightData
-│   └── session.py        # save_session / load_session; _pad_or_trim()
-├── gui/
-│   ├── app.py            # Main Tk window; menu, layout, export dispatch
-│   ├── job_config.py     # Left panel: metadata + weight label chips
-│   ├── shape_tab.py      # Two-level Notebook (shapes → weights)
-│   └── weight_grid.py    # Column-major Tab order grid
-├── datacatcher_sim.py    # Linux xdotool utility for DataCatcher simulation
-└── export/
-    ├── illustrator.py    # JSX generation + Illustrator subprocess + pypdf merge
-    ├── excel.py          # openpyxl template fill; merged-cell resolution
-    └── libreoffice.py    # Linux alternative — headless LibreOffice UNO bridge
-```
-
-**Key Python-specific notes:**
-- `app.collect_job()` walks the Tkinter widget tree to produce a `JobConfig`
-- `excel.py` resolves `MergedCell` objects by walking `merged_cells.ranges` to find parent cells before writing
-- Exports run as daemon `threading.Thread`; status bar updated via `after()` callbacks
-
-### Shared Design Constraints
+### Design Constraints
 - **No win32com/comtypes** — Illustrator driven via subprocess + ExtendScript (`/b` batch flag)
 - **Column-major Tab order is intentional** — matches X-Rite eXact scan sequence; do not change to row-major
 - **Non-destructive Illustrator workflow** — templates opened as copies, never saved
 - **PDF/X-4:2008** preset used for print-ready output
-- Assets (`runner.jsx`, `lo_uno_helper.py`, `*.xlsx` templates) are embedded in both builds
+- Assets (`runner.jsx`, `lo_uno_helper.py`, `*.xlsx` templates) are embedded via `rust-embed`
 - `data-export/ink-density-tool-rs/TEMPLATE_GUIDE.md` documents all `<<PLACEHOLDER>>` names used in Illustrator `.ai` templates
 
-### Settings Keys (both implementations)
+### Settings Keys
 - `illustrator_path` — path to `Illustrator.exe`
 - `ai_template` / `ai_template_extended` — `.ai` master template paths (standard 14-step / extended 16-step); each template contains W1/W2/W3 slots for up to 3 weights per page
 - `default_weight_labels`, `default_step_labels`, `last_session_path`
